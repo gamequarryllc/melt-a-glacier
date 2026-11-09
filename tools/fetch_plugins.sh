@@ -44,8 +44,8 @@ revenuecat() {  # android|ios
 		cp -R "$tmp/godotx_revenue_cat/android/revenue_cat" android/
 		echo "RevenueCat Android library -> android/revenue_cat"
 	else
-		# Skip the debug symbols and the mac/tv/watch/vision slices (~900 MB unzipped).
-		unzip -q -o "$CACHE/$f" 'godotx_revenue_cat/ios/*' -x '*/dSYMs/*' -d "$tmp"
+		# Keep the dSYMs: each xcframework's Info.plist names them, and Xcode's archive fails if they're missing.
+		unzip -q -o "$CACHE/$f" 'godotx_revenue_cat/ios/*' -d "$tmp"
 		rm -rf ios/plugins/revenue_cat
 		mkdir -p ios/plugins
 		cp -R "$tmp/godotx_revenue_cat/ios/plugins/revenue_cat" ios/plugins/
