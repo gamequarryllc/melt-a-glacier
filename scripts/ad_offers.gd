@@ -111,10 +111,10 @@ static func pitch(kind: String) -> String:
 	## The small line under an offer's title: what exactly you'd get.
 	match kind:
 		"double_water":
-			var line := "+💧 %s" % Fmt.num(GameState.double_water_amount())
+			var line := "+%s meltwater" % Fmt.num(GameState.double_water_amount())
 			var tool := unlocks_tool()
 			if tool != "":
-				line += "  ·  enough for the %s!" % tool
+				line += ", enough for the %s!" % tool
 			return line
 		"heat_rush":
 			return "Everything you melt goes twice as fast"

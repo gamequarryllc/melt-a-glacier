@@ -156,28 +156,28 @@ func describe(it: Dictionary) -> Dictionary:
 		"find":
 			return _describe_find(int(it.id))
 		"catalogue":
-			return {"title": "📖 The Catalogue", "body": "Mail-order extras: free bonuses for a short ad, no ads, the golden hair dryer. (It is also behind the button at the top right.)",
+			return {"title": "The Catalogue", "body": "Mail-order extras: free bonuses for a short ad, no ads, the golden hair dryer. (It is also behind the button at the top right.)",
 				"price": "", "can": true, "action": "OPEN"}
 	return {}
 
 
 func _describe_tool(i: int) -> Dictionary:
 	var t: Dictionary = Balance.TOOLS[i]
-	var stats := "Power %s · heat zone %.1f m · reach %s m" % [Fmt.num(t.power), t.radius, Fmt.num(t.range)]
-	var d := {"title": "%s %s" % [t.icon, t.name], "body": "%s\n%s" % [t.desc, stats], "price": "", "can": false, "action": ""}
+	var stats := "Power %s, heat zone %.1f m, reach %s m" % [Fmt.num(t.power), t.radius, Fmt.num(t.range)]
+	var d := {"title": str(t.name), "body": "%s\n%s" % [t.desc, stats], "price": "", "can": false, "action": ""}
 	if i < GameState.tool_index:
-		d.price = "✔ Owned"
+		d.price = "Owned"
 		d.action = "OWNED"
 	elif i == GameState.tool_index:
 		d.price = "In your hands"
 		d.action = "IN USE"
 	elif i == GameState.next_tool_index():
 		var cost: float = t.cost
-		d.price = "💧 " + Fmt.num(cost)
+		d.price = Fmt.num(cost)
 		d.can = GameState.water >= cost
 		d.action = "BUY"
 	else:
-		d.price = "🔒 💧 " + Fmt.num(t.cost)
+		d.price = Fmt.num(t.cost)
 		d.body = "%s\nBuy the %s first." % [t.desc, Balance.TOOLS[i - 1].name]
 		d.action = "LOCKED"
 	return d
@@ -186,7 +186,7 @@ func _describe_tool(i: int) -> Dictionary:
 func _describe_upgrade(key: String) -> Dictionary:
 	var u := GameState.upgrade_def(key)
 	var lvl := int(GameState.upgrade_levels.get(key, 0))
-	var d := {"title": "%s %s · Lv %d/%d" % [u.icon, u.name, lvl, int(u.max)],
+	var d := {"title": str(u.name), "note": "Lv %d/%d" % [lvl, int(u.max)],
 		"body": "%s per level.\nRight now: x%.2f" % [u.desc, GameState.upgrade_mult(key)],
 		"price": "", "can": false, "action": ""}
 	if GameState.upgrade_maxed(key):
@@ -194,7 +194,7 @@ func _describe_upgrade(key: String) -> Dictionary:
 		d.action = "MAXED"
 	else:
 		var cost := GameState.upgrade_cost(key)
-		d.price = "💧 " + Fmt.num(cost)
+		d.price = Fmt.num(cost)
 		d.can = GameState.water >= cost
 		d.action = "BUY"
 	return d
@@ -207,9 +207,9 @@ func _describe_helper(i: int) -> Dictionary:
 	var n := int(GameState.helper_counts[i])
 	var cost := GameState.helper_cost(i)
 	var each := GameState.helper_each(i) / maxf(GameState.debug_speed, 0.001)
-	return {"title": "%s %s" % [h.icon, h.name],
-		"body": "%s\nMelts %s hp/s. You have %d." % [h.desc, Fmt.num(each), n],
-		"price": "💧 " + Fmt.num(cost), "can": GameState.water >= cost, "action": "HIRE"}
+	return {"title": str(h.name),
+		"body": "%s\nEach one melts %s a second. You have %d." % [h.desc, Fmt.num(each), n],
+		"price": Fmt.num(cost), "can": GameState.water >= cost, "action": "HIRE"}
 
 
 func _describe_kevin(i: int) -> Dictionary:
@@ -218,7 +218,7 @@ func _describe_kevin(i: int) -> Dictionary:
 	var h: Dictionary = Balance.HELPERS[i]
 	var lvl := int(GameState.helper_counts[i])
 	var cost := GameState.helper_cost(i)
-	var d := {"title": "%s %s" % [h.icon, h.name], "body": "", "price": "💧 " + Fmt.num(cost),
+	var d := {"title": str(h.name), "body": "", "price": Fmt.num(cost),
 		"can": GameState.water >= cost, "action": "UPGRADE"}
 	if lvl == 0:
 		if GameState.stage == 0:
@@ -228,9 +228,9 @@ func _describe_kevin(i: int) -> Dictionary:
 			d.body = "Kevin dozed off after the village party. Wake him up to bomb\nthe frozen lake, then upgrade him again for bigger bombs."
 			d.action = "WAKE UP"
 		return d
-	d.title += " · Lv %d/%d" % [lvl, GameState.helper_max_level(i)]
+	d.note = "Lv %d/%d" % [lvl, GameState.helper_max_level(i)]
 	var total := GameState.helper_power(i) / maxf(GameState.debug_speed, 0.001)
-	var now := "Right now: a bomb every %.1f s, melting %s hp/s." % [HelperSwarm.bomb_interval(lvl), Fmt.num(total)]
+	var now := "Right now: a bomb every %.1f s, melting %s a second." % [HelperSwarm.bomb_interval(lvl), Fmt.num(total)]
 	if GameState.helper_maxed(i):
 		d.body = "As hot as he gets.\n" + now
 		d.price = "MAX"
@@ -262,19 +262,19 @@ func _describe_find(d: int) -> Dictionary:
 	if d >= Balance.DISCOVERIES.size():
 		var gs: Dictionary = GLACIER_SLOTS[d - Balance.DISCOVERIES.size()]
 		if _glacier_slot_found(d - Balance.DISCOVERIES.size()):
-			return {"title": "%s %s" % [gs.icon, gs.title], "body": gs.body, "price": "", "can": false, "action": ""}
-		return {"title": "🧊 ???", "body": gs.hint, "price": "", "can": false, "action": ""}
+			return {"title": str(gs.title), "body": gs.body, "price": "", "can": false, "action": ""}
+		return {"title": "???", "body": gs.hint, "price": "", "can": false, "action": ""}
 	var info: Dictionary = Balance.DISCOVERIES[d]
 	var rarity: String = Balance.rarity(d).name
 	if GameState.discovered[d]:
-		return {"title": "%s %s  ·  %s" % [info.icon, info.name, rarity],
-			"body": "%s\nSold for 💧 %s" % [info.flavor, Fmt.num(float(info.value) * GameState.sell_mult())],
+		return {"title": str(info.name), "note": rarity,
+			"body": "%s\nSold for %s meltwater." % [info.flavor, Fmt.num(float(info.value) * GameState.sell_mult())],
 			"price": "", "can": false, "action": ""}
 	var layer_set: Array = Balance.LAYER_SETS[GameState.grids[int(info.glacier)].spec.layers] if not GameState.grids.is_empty() else Balance.LAYER_SETS.valley
 	var where := "Somewhere in the %s" % layer_set[int(info.layer)].name
 	if int(info.glacier) > GameState.stage:
 		where += " of the frozen lake"
-	return {"title": "🧊 Still frozen  ·  %s" % rarity, "body": where + ".", "price": "", "can": false, "action": ""}
+	return {"title": "Still frozen", "note": rarity, "body": where + ".", "price": "", "can": false, "action": ""}
 
 
 func use(it: Dictionary) -> Dictionary:
@@ -297,7 +297,7 @@ func use(it: Dictionary) -> Dictionary:
 			elif d.action == "LOCKED":
 				r.text = "🔒 Buy the %s first" % Balance.TOOLS[i - 1].name
 			elif d.action == "BUY":
-				r.text = "Not enough 💧: %s more to go" % Fmt.num(float(t.cost) - GameState.water)
+				r.text = "Not enough meltwater: %s more to go" % Fmt.num(float(t.cost) - GameState.water)
 			else:
 				r.text = "%s Already yours" % t.icon
 		"upgrade":
@@ -309,7 +309,7 @@ func use(it: Dictionary) -> Dictionary:
 				r.ok = true
 				r.text = "%s %s: level %d!" % [u.icon, u.name, int(GameState.upgrade_levels[key])]
 			else:
-				r.text = "Not enough 💧: %s more to go" % Fmt.num(GameState.upgrade_cost(key) - GameState.water)
+				r.text = "Not enough meltwater: %s more to go" % Fmt.num(GameState.upgrade_cost(key) - GameState.water)
 		"helper":
 			var i := int(it.id)
 			var h: Dictionary = Balance.HELPERS[i]
@@ -319,7 +319,7 @@ func use(it: Dictionary) -> Dictionary:
 				r.ok = true
 				r.text = _hired_text(i)
 			else:
-				r.text = "Not enough 💧: %s more to go" % Fmt.num(GameState.helper_cost(i) - GameState.water)
+				r.text = "Not enough meltwater: %s more to go" % Fmt.num(GameState.helper_cost(i) - GameState.water)
 	if r.ok:
 		_bounce(it)
 		refresh()

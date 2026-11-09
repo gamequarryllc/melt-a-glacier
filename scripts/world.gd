@@ -168,7 +168,7 @@ func _ready() -> void:
 		hud.toast("⚓ There's a ship frozen in here!"))
 	fleet.ship_freed.connect(func(n: String, bounty: float):
 		Sound.jingle("pirate_sting", -3.0, 2.5)
-		hud.toast("☠️ %s is free! The goblins pay you 💧 %s" % [n, Fmt.num(bounty)]))
+		hud.toast("☠️ %s is free! The goblins pay you %s meltwater" % [n, Fmt.num(bounty)]))
 	Sound.indoors = false
 
 	get_window().size_changed.connect(_fit_render_scale)
@@ -837,16 +837,16 @@ func _update_coach() -> void:
 				GameState.tutorial_step = 1
 				_coach_timer = 0.0
 			elif hud.touch_mode:
-				text = "Walk up to the ice with the left stick,\naim at it and hold 🔥 to melt it"
+				text = "Walk up to the ice with the left stick,\naim at it and hold MELT"
 			else:
 				text = "Walk up to the ice (WASD), aim at it\nand hold the left mouse button to melt it"
 		1:
-			text = "Melted ice turns into 💧 meltwater.\nDeeper ice is harder, but worth more"
+			text = "Melted ice turns into meltwater.\nDeeper ice is harder, but worth more"
 			if _coach_timer > 7.0:
 				GameState.tutorial_step = 2
 		2:
 			if GameState.water >= 20.0:
-				text = "Spend your 💧 at the 🏠 shed:\nwalk in, hotter tools melt way faster"
+				text = "Spend your meltwater at the shed:\nwalk in, hotter tools melt way faster"
 	hud.set_coach(text)
 
 

@@ -407,9 +407,9 @@ func _run() -> void:
 	world.helpers._update_volcano(0.0)
 	var kd: Dictionary = shed.describe(kevin)
 	var sign_text: String = world.helpers._kevin_sign.text
-	check(gs.helper_counts[2] == 3 and kd.action == "UPGRADE" and str(kd.title).contains("Lv 3")
+	check(gs.helper_counts[2] == 3 and kd.action == "UPGRADE" and str(kd.get("note", "")).contains("Lv 3")
 		and sign_text.contains("Lv 3") and (kevin.price as Label3D).text.begins_with("Lv 3"),
-		"buying him again levels him up (%s; his sign says %s)" % [kd.title, sign_text])
+		"buying him again levels him up (%s; his sign says %s)" % [kd.get("note", ""), sign_text])
 	var swarm = world.helpers
 	check(swarm.bomb_interval(3) < swarm.bomb_interval(1) and swarm.bomb_scale(3) > swarm.bomb_scale(1),
 		"each level throws bigger bombs, more often")
