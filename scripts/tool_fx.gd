@@ -1,28 +1,37 @@
 class_name ToolFx
 extends Node3D
 ## What comes out of the tool in your hand, in 3D, from its nozzle to where
-## the heat lands, and what the ice does when it's hit. Every tool is its own
-## thing:
-## - Hair dryer: rings of hot air rushing out and widening in a warm haze,
-##   with wind streaks. Snow flurries up where it lands.
-## - Heat lamp: a soft cone of warm light with rays and dust glinting in it.
-## - Blowtorch: a hard blue flame at the nozzle and a roaring blue jet. Sparks
-##   sizzle off the ice.
+## the heat lands, and what the ice does when it's hit. It's drawn like a
+## cartoon, to go with the chunky models: flat colours, hard edges, brush
+## strokes. Every tool is its own thing:
+## - Hair dryer: gusts of hot air as brush strokes curling out along a
+##   widening cone. Snow flurries up where it lands.
+## - Heat lamp: rays of light streaming from the bulb, dust glinting in them.
+## - Blowtorch: a hard blue dart of flame at the nozzle and a tight blue jet
+##   with a bright heart. Sparks sizzle off the ice.
 ## - Flamethrower: a roaring flame at the nozzle and fire that billows out
 ##   bigger as it flies, with embers. Fire splashes across the ice.
-## - Lava hose: a heavy molten stream that arcs, drips and splashes.
+## - Lava hose: one heavy rope of lava that arcs, drips and splashes.
 ## - Orbital mirror: an aiming laser, and a column of sunlight from space with
-##   shockwaves rolling out where it lands.
-## Steam boils up off the ice for all of them (more for the hotter tools).
+##   a crown of fire where it lands.
+## Clouds of steam boil up off the ice for all of them (more for the hotter tools).
 ## Upgrades show: Wider Nozzle makes it wider where it lands, Longer Reach lets
-## it go further, Heat Output makes it hotter, brighter and denser.
+## it go further, Heat Output makes it hotter coloured, brighter and denser.
 ## The player calls update() every physics frame. It's all CPU particles and a
-## few soft meshes, light enough for a phone.
+## few meshes shaped by their shaders, light enough for a phone.
+## See the looks with tests/spray_shots.gd.
 
 const CONE_SHADER := preload("res://shaders/tool_cone.gdshader")
 const COLUMN_SHADER := preload("res://shaders/light_column.gdshader")
 const SPARK_SHADER := preload("res://shaders/spark.gdshader")
 const BEAM_SHADER := preload("res://shaders/heat_beam.gdshader")
+const PUFF_SHADER := preload("res://shaders/toon_puff.gdshader")
+const PUFF_TOP_SHADER := preload("res://shaders/toon_puff_top.gdshader")
+const WIND_SHADER := preload("res://shaders/wind_lines.gdshader")
+const FLAME_SHADER := preload("res://shaders/toon_flame.gdshader")
+const LAVA_SHADER := preload("res://shaders/lava_stream.gdshader")
+const LAVA_SPEED := 12.0                     # how fast the lava leaves the hose, m/s
+const LAVA_FALL := 4.0                       # and how hard it falls
 const SUN_DIR := Vector3(0.32, 1.0, 0.18)    # where the orbital mirror's sunlight comes from
 const SKY_LEN := 140.0                       # how far up the sunlight column goes
 # The colour the ice glows where each tool's heat lands.
@@ -34,8 +43,10 @@ var _streams: Array = []     # {p, speed, spread[, size, fall, life]}: fly from 
 var _impacts: Array = []     # {p[, area, ring, size, lift]}: where it lands, facing out of the ice
 var _cones: Array = []       # {mi, kind: "beam" (nozzle to ice) or "flame" (its own length), ...}
 var _columns: Array = []     # {mi, width, strength}: the orbital mirror's sunlight
+var _lava: MeshInstance3D    # the lava hose's stream
+var _lava_head := 0.0        # how far along its arc the stream has got (0..1)
+var _lava_tail := 0.0        # and how far its end has got after you let go
 var _drips: CPUParticles3D   # lava dripping off the stream on its way
-var _drip_fall := 0.0
 var _laser: MeshInstance3D   # the orbital mirror's aiming laser
 var _tip: MeshInstance3D     # a glow at the nozzle
 var _light: OmniLight3D
@@ -44,9 +55,8 @@ var _built := ""             # which tool and upgrade levels the effects were bu
 var _t := 0.0
 var _on := 0.0               # fades the glows in and out
 
-static var _puff: Texture2D
 static var _noise: Texture2D
-static var _tube: ArrayMesh
+static var _tubes: Dictionary = {}   # rows -> the unit tube with that many rows along it
 
 
 func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3, delta: float) -> void:
@@ -67,24 +77,15 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 	var radius: float = GameState.tool_radius()
 	var heat: float = s.heat
 	var aim_basis := _facing(dir)
-	var wob: float = s.get("wobble", 0.0)
 
 	# What flies out of the nozzle, aimed so it lands on the spot.
-	var arc_life := 0.0
 	for st in _streams:
 		var p: CPUParticles3D = st.p
 		p.emitting = active
 		if not active:
 			continue
 		var life := clampf(dist / float(st.speed), 0.05, 3.0)
-		var aim := dir
-		if st.has("fall"):   # lava falls, so it aims a little high
-			aim = (to + Vector3(0.0, 0.5 * float(st.fall) * life * life, 0.0) - from).normalized()
-			arc_life = life
-		var b := _facing(aim)
-		if wob > 0.0:   # hot air wanders about
-			b = b * Basis(Vector3.RIGHT, sin(_t * 6.3) * wob) * Basis(Vector3.UP, sin(_t * 4.1 + 1.3) * wob)
-		p.global_transform = Transform3D(b, from)
+		p.global_transform = Transform3D(aim_basis, from)
 		p.lifetime = life * float(st.get("life", 1.0))
 		p.spread = clampf(rad_to_deg(atan2(radius * float(st.spread), dist)), 0.3, 60.0)
 		if st.has("size"):   # grows to this share of the heat zone by the time it lands
@@ -92,15 +93,34 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 			p.scale_amount_min = sz * 0.8
 			p.scale_amount_max = sz * 1.2
 
-	# Lava drips off the stream along its arc.
-	if _drips != null:
-		_drips.emitting = active and arc_life > 0.0
+	# The lava hose: a rope of lava thrown in an arc that lands on the spot. It
+	# takes a moment to get there, and what's in the air when you let go flies on.
+	if _lava != null:
+		var flight := clampf(dist / LAVA_SPEED, 0.05, 3.0)
+		if active:
+			_lava_head = minf(_lava_head + delta / flight, 1.0)
+			_lava_tail = 0.0
+		else:
+			_lava_tail = minf(_lava_tail + delta / flight, 1.0)
+			if _lava_tail >= _lava_head:
+				_lava_head = 0.0
+				_lava_tail = 0.0
+		var g := Vector3(0.0, -LAVA_FALL, 0.0)
+		var v0 := (to - from - 0.5 * g * flight * flight) / flight
+		_lava.visible = _lava_head > _lava_tail
+		if _lava.visible:
+			var m := _lava.material_override as ShaderMaterial
+			m.set_shader_parameter("start", from)
+			m.set_shader_parameter("v0", v0)
+			m.set_shader_parameter("flight", flight)
+			m.set_shader_parameter("head", _lava_head)
+			m.set_shader_parameter("tail", _lava_tail)
+		# Lava drips off it along the way.
+		_drips.emitting = active and _lava_head > 0.5
 		if _drips.emitting:
-			var g := Vector3(0.0, -_drip_fall, 0.0)
-			var v0 := (to - from - 0.5 * g * arc_life * arc_life) / arc_life
 			var pts := PackedVector3Array()
 			for k in 7:
-				var tt := (k + 1.5) / 9.0 * arc_life
+				var tt := (k + 1.5) / 9.0 * flight
 				pts.append(from + v0 * tt + 0.5 * g * tt * tt)
 			_drips.emission_points = pts
 
@@ -108,7 +128,7 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 	var land := Transform3D(_facing(normal), to + normal * 0.06)
 	for im in _impacts:
 		var p: CPUParticles3D = im.p
-		p.emitting = active and hit
+		p.emitting = active and hit and (_lava == null or _lava_head >= 1.0)
 		if not p.emitting:
 			continue
 		p.global_transform = land
@@ -154,7 +174,7 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 		var w: float = radius * float(c.width) * (0.97 + 0.03 * sin(_t * 9.0))
 		m.set_shader_parameter("r0", w)
 		m.set_shader_parameter("r1", w)
-		m.set_shader_parameter("strength", float(c.strength) * _on * (0.8 + 0.2 * heat))
+		m.set_shader_parameter("strength", float(c.strength) * _on * (1.0 if c.has("steady") else 0.8 + 0.2 * heat))
 	if _laser != null:
 		_laser.visible = _on > 0.01
 		if _laser.visible:
@@ -202,6 +222,7 @@ func _build(tool_i: int, gold: bool) -> void:
 	_cones.clear()
 	_columns.clear()
 	_drips = null
+	_lava = null
 	_laser = null
 	_tip = null
 	var heat_lv := int(GameState.upgrade_levels.get("heat", 0))
@@ -232,143 +253,161 @@ func _build(tool_i: int, gold: bool) -> void:
 
 
 func _build_hair_dryer(gold: bool, heat: float, hot: float, more: float) -> void:
-	_style = {"heat": heat, "wobble": 0.045, "light": 0.0}
-	var warm := Color(1.0, 0.74, 0.64).lerp(Color(1.0, 0.56, 0.32), hot)   # hotter air, more orange
+	_style = {"heat": heat, "light": 0.0}
+	# Hot air, drawn like a cartoon draws wind: brush strokes rushing out along a
+	# widening cone and curling round it. Hotter air blushes from pink to orange.
+	var rim := Color(1.0, 0.5, 0.42).lerp(Color(1.0, 0.4, 0.12), hot)
+	var mid := Color(1.0, 0.96, 0.93).lerp(Color(1.0, 0.92, 0.7), hot)
 	if gold:
-		warm = Color(1.0, 0.8, 0.3)
-	# Rings of hot air rushing out, widening to the size of the heat zone.
-	var rings := _rings([Color(warm, 0.0), Color(warm, 0.55), Color(warm, 0.35), Color(warm, 0.0)],
-		int(8 * more), 0.9, true, [0.0, 0.15, 0.7, 1.0])
-	rings.initial_velocity_min = 6.0
-	rings.initial_velocity_max = 6.4
-	rings.scale_amount_curve = _curve(0.1, 1.0)
-	_streams.append({"p": rings, "speed": 6.2, "spread": 0.04, "size": 0.8})
-	# A warm haze of shimmering air round them.
-	var haze := _puffs([Color(warm, 0.0), Color(warm, 0.3 + 0.1 * hot), Color(warm, 0.18), Color(warm, 0.0)], int(16 * more))
-	haze.initial_velocity_min = 5.0
-	haze.initial_velocity_max = 6.5
-	haze.scale_amount_curve = _curve(0.15, 1.0)
-	_streams.append({"p": haze, "speed": 5.8, "spread": 0.3, "size": 0.85})
-	# Wind streaks whooshing past.
-	var wind := _sparks([Color(1, 1, 1, 0.0), Color(1.0, 0.97, 0.95, 0.8), Color(1, 1, 1, 0.0)], 0.03, 10.0, 12)
-	wind.initial_velocity_min = 7.5
-	wind.initial_velocity_max = 8.5
-	_streams.append({"p": wind, "speed": 8.0, "spread": 0.5})
+		rim = Color(0.95, 0.62, 0.08)
+		mid = Color(1.0, 0.96, 0.62)
+	# A blush of warm air round them.
+	_add_cone("beam", Color(1.0, 0.8, 0.7), rim, {"r0": 0.05, "width": 0.8, "strength": 0.07 + 0.06 * hot,
+		"soft_edge": 0.6, "fade_in": 0.05, "fade_out": 0.6, "noise_amount": 0.5, "noise_scale": 0.3, "scroll": 5.0})
+	_add_wind(mid, rim, {"r0": 0.06, "width": 0.8, "lines": 7.0 + roundf(4.0 * hot), "speed": 6.0 + 3.0 * hot,
+		"twist": 0.5, "gap": 1.7, "fill": 0.6, "line": 0.036, "gain": 1.5})
+	_add_wind(mid, rim, {"r0": 0.03, "width": 0.4, "lines": 4.0 + roundf(2.0 * hot), "speed": 7.5 + 3.0 * hot,
+		"twist": -0.7, "gap": 1.4, "fill": 0.55, "line": 0.03, "gain": 1.5})
 	if gold:   # the golden hair dryer blows glitter
 		var glitter := _sparks([Color(1.0, 0.9, 0.4, 1.0), Color(1.0, 0.75, 0.2, 0.9), Color(1.0, 0.7, 0.15, 0.0)], 0.04, 1.6, 26)
 		glitter.initial_velocity_min = 5.0
 		glitter.initial_velocity_max = 7.0
 		_streams.append({"p": glitter, "speed": 6.0, "spread": 0.6})
-	# Snow flurries up where it lands.
-	var flurry := _puffs([Color(0.82, 0.9, 1.0, 1.0), Color(0.86, 0.92, 1.0, 0.85), Color(0.9, 0.95, 1.0, 0.0)], int(26 * more), false)
-	flurry.lifetime = 0.9
-	flurry.spread = 70.0
-	flurry.initial_velocity_min = 1.5
-	flurry.initial_velocity_max = 3.2
-	flurry.gravity = Vector3(0, -3.5, 0)
+	# Snow blown up off the ice where it lands.
+	var flurry := _toon(int(22 * more), false, {"col_core": Color.WHITE, "col_mid": Color.WHITE,
+		"col_edge": Color(0.58, 0.76, 1.0), "lump": 0.45, "erode": 0.9, "band_mid": 0.1, "band_core": 0.2, "gain": 1.3})
+	_spray(flurry, 60.0, 1.4, 3.0, -3.5, 0.8)
 	flurry.damping_min = 1.0
 	flurry.damping_max = 2.0
-	flurry.scale_amount_min = 0.08
-	flurry.scale_amount_max = 0.2
+	flurry.scale_amount_min = 0.1
+	flurry.scale_amount_max = 0.24
 	flurry.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	_impacts.append({"p": flurry, "area": 0.35})
-	_add_steam(int(18 * more), 0.6, 1.4)
+	_impacts.append({"p": flurry, "area": 0.4})
+	_tip = _glow_tip(0.1, Color(rim, 0.6))
+	_add_steam(int(9 * more), 0.5, 1.4)
 
 
 func _build_heat_lamp(heat: float, hot: float, more: float) -> void:
 	_style = {"heat": heat, "light": 0.9 + 0.4 * hot}
-	# A soft cone of warm light from the lamp to the ice, with rays in it.
-	var lc := Color(1.0, 0.78, 0.3).lerp(Color(1.0, 0.92, 0.6), hot * 0.5)
-	_add_cone("beam", lc, Color(1.0, 0.6, 0.15), {"r0": 0.12, "width": 1.0, "strength": 0.5 + 0.15 * hot,
-		"soft_edge": 0.12, "fade_in": 0.02, "fade_out": 0.85, "noise_amount": 0.2, "noise_scale": 0.25,
-		"scroll": 0.6, "stripes": 0.75})
+	# A cone of warm light from the lamp to the ice: a soft outer glow, a
+	# brighter middle, and rays of light sliding along it.
+	var lc := Color(1.0, 0.8, 0.32).lerp(Color(1.0, 0.9, 0.55), hot * 0.6)
+	_add_cone("beam", lc, Color(1.0, 0.66, 0.2), {"r0": 0.13, "width": 1.0, "strength": 0.07 + 0.03 * hot,
+		"soft_edge": 0.5, "fade_in": 0.02, "fade_out": 0.8, "noise_amount": 0.0})
+	var ray := Color(1.0, 0.97, 0.7)
+	var ray_rim := Color(1.0, 0.72, 0.15)
+	_add_wind(ray, ray_rim, {"r0": 0.13, "width": 0.98, "lines": 9.0 + roundf(5.0 * hot), "speed": 2.6,
+		"twist": 0.0, "wiggle": 0.0, "gap": 2.0, "fill": 0.62, "line": 0.03, "gain": 1.7})
+	_add_wind(ray, ray_rim, {"r0": 0.07, "width": 0.5, "lines": 5.0 + roundf(3.0 * hot), "speed": 3.2,
+		"twist": 0.0, "wiggle": 0.0, "gap": 1.7, "fill": 0.6, "line": 0.026, "gain": 1.7})
 	# Dust glinting in the light, drifting along.
-	var motes := _sparks([Color(1.0, 0.9, 0.5, 0.0), Color(1.0, 0.88, 0.45, 1.0), Color(1.0, 0.8, 0.35, 0.15),
-		Color(1.0, 0.9, 0.5, 0.95), Color(1.0, 0.8, 0.3, 0.0)], 0.07, 1.0, int(50 * more))
+	var motes := _sparks([Color(1.0, 0.95, 0.6, 0.0), Color(1.0, 0.95, 0.65, 1.0), Color(1.0, 0.85, 0.4, 0.15),
+		Color(1.0, 0.95, 0.6, 0.95), Color(1.0, 0.85, 0.35, 0.0)], 0.06, 1.0, int(24 * more))
+	(motes.mesh.surface_get_material(0) as ShaderMaterial).set_shader_parameter("gain", 2.0)
 	motes.initial_velocity_min = 1.0
 	motes.initial_velocity_max = 1.6
 	_streams.append({"p": motes, "speed": 1.3, "spread": 0.8})
-	_tip = _glow_tip(0.36, Color(1.0, 0.82, 0.45, 0.9))
-	_add_steam(int(20 * more), 0.6, 1.6)
+	_tip = _glow_tip(0.24, Color(1.0, 0.85, 0.5, 0.8))
+	_add_steam(int(11 * more), 0.55, 1.6)
 
 
 func _build_blowtorch(heat: float, hot: float, more: float) -> void:
 	_style = {"heat": heat, "light": 1.1 + 0.4 * hot, "flicker": 0.6}
-	var core := Color(0.75, 0.9, 1.0).lerp(Color.WHITE, hot * 0.6)
-	# The flame at the nozzle: a white-blue inner cone in a blue outer one.
-	_add_cone("flame", core, Color(0.6, 0.8, 1.0), {"len": 0.24, "r0": 0.03, "r1": 0.004, "bulge": 0.015,
-		"strength": 0.95, "soft_edge": 0.5, "fade_in": 0.0, "fade_out": 0.75, "noise_amount": 0.25,
-		"noise_scale": 3.0, "scroll": 6.0, "flicker": 0.08})
-	_add_cone("flame", Color(0.3, 0.5, 1.0), Color(0.35, 0.3, 0.95), {"len": 0.6 + 0.2 * hot, "r0": 0.045,
-		"r1": 0.012, "bulge": 0.04, "strength": 0.75, "soft_edge": 0.45, "fade_in": 0.0, "fade_out": 0.55,
-		"noise_amount": 0.5, "noise_scale": 2.0, "scroll": 8.0, "flicker": 0.12})
-	# The jet roaring out to the ice.
-	_add_cone("beam", Color(0.45, 0.65, 1.0), Color(0.35, 0.4, 1.0), {"r0": 0.035, "width": 0.3,
-		"strength": 0.36 + 0.15 * hot, "soft_edge": 0.3, "fade_in": 0.08, "fade_out": 0.9,
-		"noise_amount": 0.9, "noise_scale": 0.6, "scroll": 10.0})
-	var jet := _puffs([Color(core, 0.9), Color(0.35, 0.55, 1.0, 0.75), Color(0.3, 0.35, 0.95, 0.4),
-		Color(0.4, 0.3, 0.9, 0.0)], int(50 * more))
+	var core := Color(0.82, 0.94, 1.0).lerp(Color.WHITE, hot * 0.6)
+	var blue := Color(0.3, 0.62, 1.0)
+	var deep := Color(0.16, 0.3, 0.92)
+	# The jet roaring out to the ice: a faint blue glow with fire racing down it.
+	_add_cone("beam", blue, deep, {"r0": 0.03, "width": 0.3, "strength": 0.2 + 0.1 * hot, "soft_edge": 0.5,
+		"fade_in": 0.05, "fade_out": 0.85, "noise_amount": 0.4, "noise_scale": 0.6, "scroll": 10.0})
+	var jet := _toon(int(30 * more), true, {"col_core": blue, "col_mid": blue.lerp(deep, 0.45), "col_edge": deep,
+		"lump": 0.4, "erode": 0.35, "churn": 0.8})
 	jet.initial_velocity_min = 11.0
 	jet.initial_velocity_max = 13.0
-	jet.scale_amount_curve = _curve(0.15, 1.0)
-	_streams.append({"p": jet, "speed": 12.0, "spread": 0.2, "size": 0.35})
+	jet.scale_amount_curve = _curve(0.2, 1.0)
+	_streams.append({"p": jet, "speed": 12.0, "spread": 0.1, "size": 0.3})
+	var hotjet := _toon(int(34 * more), true, {"col_core": core, "col_mid": Color(0.5, 0.9, 1.0), "col_edge": Color(0.3, 0.74, 1.0),
+		"lump": 0.35, "erode": 0.7, "churn": 0.8, "band_mid": 0.12, "band_core": 0.42, "gain": 1.3}, 1)
+	hotjet.initial_velocity_min = 11.5
+	hotjet.initial_velocity_max = 12.5
+	hotjet.scale_amount_curve = _curve(0.45, 1.0)
+	_streams.append({"p": hotjet, "speed": 12.0, "spread": 0.03, "size": 0.15 + 0.04 * hot, "life": 0.8})
+	# The flame at the nozzle: a white-hot dart inside a blue one.
+	_add_flame(Color(0.5, 0.75, 1.0), blue, deep, {"len": 0.55 + 0.2 * hot, "r0": 0.04, "r1": 0.008, "bulge": 0.035,
+		"rough": 0.5, "scroll": 8.0, "flicker": 0.12})
+	_add_flame(Color.WHITE, core, Color(0.6, 0.85, 1.0), {"len": 0.26, "r0": 0.026, "r1": 0.004, "bulge": 0.012,
+		"rough": 0.3, "scroll": 6.0, "flicker": 0.08, "tail": 0.3})
 	# Sparks sizzling off the ice.
-	var sparks := _sparks([Color(1, 1, 1, 1), Color(0.7, 0.85, 1.0, 1.0), Color(0.4, 0.6, 1.0, 0.0)], 0.035, 6.0, int(26 * more))
+	var sparks := _sparks([Color(1, 1, 1, 1), Color(0.7, 0.85, 1.0, 1.0), Color(0.4, 0.6, 1.0, 0.0)], 0.035, 6.0, int(22 * more))
 	_spray(sparks, 65.0, 3.0, 6.5, -9.0, 0.55)
 	_impacts.append({"p": sparks, "area": 0.2})
 	_tip = _glow_tip(0.2, Color(0.55, 0.75, 1.0, 1.0))
-	_add_steam(int(26 * more), 0.65, 2.2)
+	_add_steam(int(13 * more), 0.6, 2.2)
 
 
 func _build_flamethrower(heat: float, hot: float, more: float) -> void:
 	_style = {"heat": heat, "light": 2.0 + 0.6 * hot, "flicker": 1.0}
-	var core := Color(1.0, 0.95, 0.7).lerp(Color.WHITE, hot * 0.4)
-	# A roaring flame at the nozzle and a core of fire reaching out.
-	_add_cone("flame", core, Color(1.0, 0.6, 0.15), {"len": 0.42, "r0": 0.05, "r1": 0.02, "bulge": 0.06,
-		"strength": 0.8, "soft_edge": 0.4, "fade_in": 0.0, "fade_out": 0.5, "noise_amount": 0.6,
-		"noise_scale": 2.0, "scroll": 7.0, "flicker": 0.15})
-	_add_cone("beam", Color(1.0, 0.82, 0.3), Color(1.0, 0.4, 0.08), {"r0": 0.06, "width": 0.4,
-		"strength": 0.45 + 0.15 * hot, "soft_edge": 0.3, "fade_in": 0.04, "fade_out": 0.8,
-		"noise_amount": 0.8, "noise_scale": 0.5, "scroll": 9.0})
-	# Fire billowing out, growing as it flies and going smoky at the end.
-	var fire := _puffs([Color(core, 1.0), Color(1.0, 0.75, 0.25, 1.0), Color(1.0, 0.45, 0.08, 0.9),
-		Color(0.75, 0.2, 0.05, 0.7), Color(0.28, 0.22, 0.2, 0.0)], int(46 * more), true, [0.0, 0.18, 0.45, 0.72, 1.0])
+	var core := Color(1.0, 0.97, 0.72).lerp(Color.WHITE, hot * 0.5)
+	var yellow := Color(1.0, 0.82, 0.22)
+	var orange := Color(1.0, 0.5, 0.08)
+	var red := Color(0.86, 0.2, 0.05)
+	# Fire billowing out, growing as it flies and going to smoke at its edges...
+	var fire := _toon(int(30 * more), true, {"col_core": orange.lerp(yellow, 0.45), "col_mid": orange, "col_edge": red,
+		"col_end": Color(0.24, 0.2, 0.2), "end_from": 0.8, "lump": 0.45, "erode": 0.5, "churn": 0.9})
 	fire.initial_velocity_min = 9.5
 	fire.initial_velocity_max = 11.0
-	fire.scale_amount_curve = _curve(0.06, 1.0)
+	fire.scale_amount_curve = _curve(0.08, 1.0)
 	fire.gravity = Vector3(0, 2.0, 0)
-	_streams.append({"p": fire, "speed": 10.0, "spread": 0.45, "size": 0.68})
+	_streams.append({"p": fire, "speed": 10.0, "spread": 0.4, "size": 0.72})
+	# ...round a hotter heart.
+	var heart := _toon(int(22 * more), true, {"col_core": core, "col_mid": yellow.lerp(core, 0.4), "col_edge": yellow,
+		"lump": 0.45, "erode": 1.0, "churn": 0.9}, 1)
+	heart.initial_velocity_min = 10.0
+	heart.initial_velocity_max = 11.0
+	heart.scale_amount_curve = _curve(0.12, 1.0)
+	heart.gravity = Vector3(0, 2.0, 0)
+	_streams.append({"p": heart, "speed": 10.5, "spread": 0.16, "size": 0.44 + 0.08 * hot})
+	# A roaring flame at the nozzle.
+	_add_flame(core, yellow, orange, {"len": 0.5, "r0": 0.055, "r1": 0.02, "bulge": 0.07, "rough": 0.6,
+		"scroll": 7.0, "flicker": 0.15})
 	# Embers.
-	var embers := _sparks([Color(1.0, 0.9, 0.5, 1.0), Color(1.0, 0.5, 0.1, 0.9), Color(1.0, 0.3, 0.05, 0.0)], 0.03, 4.0, 26)
+	var embers := _sparks([Color(1.0, 0.9, 0.5, 1.0), Color(1.0, 0.5, 0.1, 0.9), Color(1.0, 0.3, 0.05, 0.0)], 0.03, 4.0, 22)
 	embers.initial_velocity_min = 7.0
 	embers.initial_velocity_max = 11.0
 	embers.gravity = Vector3(0, 3.0, 0)
 	_streams.append({"p": embers, "speed": 9.0, "spread": 0.8, "life": 1.3})
 	# Fire splashing across the ice.
-	var splash := _puffs([Color(1.0, 0.85, 0.4, 0.9), Color(1.0, 0.45, 0.1, 0.7), Color(0.4, 0.25, 0.2, 0.0)], int(22 * more), false)
+	var splash := _toon(int(14 * more), false, {"col_core": yellow, "col_mid": orange, "col_edge": red,
+		"col_end": Color(0.24, 0.2, 0.2), "end_from": 0.7, "lump": 0.45, "erode": 1.0, "churn": 0.9})
 	_spray(splash, 80.0, 2.0, 4.5, 1.0, 0.55)
 	splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	_impacts.append({"p": splash, "area": 0.25, "size": 0.35})
+	_impacts.append({"p": splash, "area": 0.3, "size": 0.4})
 	_tip = _glow_tip(0.3, Color(1.0, 0.6, 0.2, 0.9))
-	_add_steam(int(30 * more), 0.75, 2.6)
+	_add_steam(int(15 * more), 0.7, 2.6)
 
 
 func _build_lava_hose(heat: float, hot: float, more: float, fat: float) -> void:
 	_style = {"heat": heat, "light": 2.4 + 0.6 * hot, "flicker": 0.4}
-	var bright := Color(1.0, 0.6, 0.1).lerp(Color(1.0, 0.85, 0.35), hot * 0.6)
-	# A heavy stream of molten lumps, stretched out along the arc.
-	var lava := _blobs([bright, Color(1.0, 0.4, 0.05), Color(0.85, 0.2, 0.04), Color(0.5, 0.1, 0.03)],
-		0.17 * fat, int(190 * more), 3.0)
-	lava.gravity = Vector3(0, -4.0, 0)
-	lava.initial_velocity_min = 11.6
-	lava.initial_velocity_max = 12.4
-	lava.scale_amount_min = 0.75
-	lava.scale_amount_max = 1.35
-	lava.scale_amount_curve = _curve(0.65, 1.0)
-	lava.color_initial_ramp = _ramp([Color.WHITE, Color(1.0, 0.8, 0.6), Color(0.55, 0.42, 0.38)])   # crusty bits
-	_streams.append({"p": lava, "speed": 12.0, "spread": 0.12, "fall": 4.0})
+	var bright := Color(1.0, 0.62, 0.1).lerp(Color(1.0, 0.85, 0.35), hot * 0.6)
+	# One heavy rope of lava, arcing from the hose to the ice.
+	_lava = MeshInstance3D.new()
+	_lava.mesh = _tube_mesh(40)
+	var lm := ShaderMaterial.new()
+	lm.shader = LAVA_SHADER
+	lm.set_shader_parameter("noise", noise_texture())
+	lm.set_shader_parameter("r0", 0.05)
+	lm.set_shader_parameter("r1", 0.15 * fat)
+	lm.set_shader_parameter("heat", hot)
+	lm.set_shader_parameter("col_hot", Color(1.0, 0.86, 0.3).lerp(Color(1.0, 0.96, 0.62), hot))
+	lm.set_shader_parameter("fall", LAVA_FALL)
+	_lava.material_override = lm
+	_lava.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_lava.top_level = true
+	_lava.custom_aabb = AABB(Vector3(-2000, -2000, -2000), Vector3(4000, 4000, 4000))   # placed by the shader
+	_lava.visible = false
+	add_child(_lava)
+	_lava.global_transform = Transform3D.IDENTITY
 	# Drips falling off it on the way.
-	_drips = _blobs([bright, Color(0.9, 0.3, 0.05), Color(0.4, 0.08, 0.03)], 0.09 * fat, 18, 1.6)
+	_drips = _blobs([bright, Color(0.95, 0.35, 0.05), Color(0.6, 0.12, 0.04)], 0.08 * fat, 12, 1.0, false)
 	_drips.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINTS
 	_drips.emission_points = PackedVector3Array([Vector3.ZERO])
 	_drips.direction = Vector3(0, -1, 0)
@@ -377,15 +416,21 @@ func _build_lava_hose(heat: float, hot: float, more: float, fat: float) -> void:
 	_drips.initial_velocity_max = 0.5
 	_drips.gravity = Vector3(0, -12.0, 0)
 	_drips.lifetime = 0.7
+	_drips.scale_amount_curve = _curve(1.0, 0.3)
 	_drips.global_transform = Transform3D.IDENTITY   # the drip points are in the world
-	_drip_fall = 4.0
-	# Splashing where it lands.
-	var splash := _blobs([bright, Color(0.95, 0.3, 0.05), Color(0.35, 0.07, 0.03)], 0.11 * fat, int(34 * more), 1.4, false)
-	_spray(splash, 70.0, 2.5, 5.5, -14.0, 0.75)
+	# Splashing where it lands: gobs of lava thrown up, and a flare of fire.
+	var splash := _blobs([bright, Color(0.95, 0.3, 0.05), Color(0.45, 0.09, 0.03)], 0.12 * fat, int(24 * more), 1.0, false)
+	_spray(splash, 65.0, 2.5, 5.5, -14.0, 0.75)
+	splash.scale_amount_curve = _curve(1.0, 0.25)
 	splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	_impacts.append({"p": splash, "area": 0.3})
+	var flare := _toon(int(10 * more), false, {"col_core": Color(1.0, 0.9, 0.4), "col_mid": bright,
+		"col_edge": Color(0.9, 0.25, 0.04), "lump": 0.45, "erode": 1.0, "churn": 0.8})
+	_spray(flare, 60.0, 1.0, 2.5, 1.5, 0.5)
+	flare.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": flare, "area": 0.25, "size": 0.3})
 	_tip = _glow_tip(0.24, Color(1.0, 0.5, 0.15, 0.8))
-	_add_steam(int(30 * more), 0.8, 3.2)
+	_add_steam(int(16 * more), 0.75, 3.2)
 
 
 func _build_orbital_mirror(heat: float, hot: float, more: float) -> void:
@@ -410,37 +455,47 @@ func _build_orbital_mirror(heat: float, hot: float, more: float) -> void:
 	var sun := Color(1.0, 0.95, 0.75).lerp(Color.WHITE, hot * 0.5)
 	_add_column(sun, Color(1.0, 0.88, 0.55), 0.62, 0.36 + 0.1 * hot, 0.7)
 	_add_column(Color.WHITE, Color(1.0, 0.97, 0.85), 0.22, 0.5, 0.3)
-	# Shockwaves rolling out across the ice.
-	var shock := _rings([Color(1.0, 0.97, 0.75, 0.95), Color(1.0, 0.85, 0.5, 0.5), Color(1.0, 0.8, 0.4, 0.0)], 3, 0.88, false)
-	shock.lifetime = 0.8
-	shock.initial_velocity_min = 0.05   # just enough to lie them flat on the ice (align_y)
-	shock.initial_velocity_max = 0.05
-	shock.spread = 0.0
-	shock.scale_amount_curve = _curve(0.15, 1.0)
-	_impacts.append({"p": shock, "size": 1.15, "lift": 0.35})
+	# Rays of it streaming down.
+	var rays := _fx_mesh(WIND_SHADER)
+	var rm := rays.material_override as ShaderMaterial
+	for k in [["color", Color.WHITE], ["color_rim", Color(1.0, 0.86, 0.4)], ["len", SKY_LEN + 1.0], ["lines", 7.0 + roundf(4.0 * hot)],
+			["speed", 70.0], ["gap", 16.0], ["fill", 0.6], ["width", 0.07], ["twist", 0.0], ["wiggle", 0.0], ["flare", 0.0],
+			["fade_in", 0.45], ["fade_out", 0.995], ["gain", 1.6]]:
+		rm.set_shader_parameter(k[0], k[1])
+	_columns.append({"mi": rays, "width": 0.6, "strength": 1.0, "steady": true})
+	# A crown of white fire where it lands.
+	var crown := _toon(int(22 * more), false, {"col_core": Color(1.0, 0.97, 0.7), "col_mid": Color(1.0, 0.82, 0.25),
+		"col_edge": Color(1.0, 0.56, 0.1), "lump": 0.45, "erode": 1.0, "churn": 0.9})
+	crown.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	crown.emission_ring_axis = Vector3(0, 0, 1)
+	crown.emission_ring_height = 0.1
+	_spray(crown, 20.0, 1.5, 3.5, 2.0, 0.55)
+	_impacts.append({"p": crown, "ring": 0.7, "size": 0.2})
 	# Sparkles rising in a ring round the spot.
-	var sparkle := _sparks([Color(1.0, 0.97, 0.7, 1.0), Color(1.0, 0.85, 0.4, 0.8), Color(1.0, 0.8, 0.3, 0.0)], 0.06, 2.5, int(50 * more))
+	var sparkle := _sparks([Color(1.0, 0.97, 0.7, 1.0), Color(1.0, 0.85, 0.4, 0.8), Color(1.0, 0.8, 0.3, 0.0)], 0.06, 2.5, int(40 * more))
 	sparkle.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	sparkle.emission_ring_axis = Vector3(0, 0, 1)
 	sparkle.emission_ring_height = 0.1
 	_spray(sparkle, 15.0, 1.0, 3.0, 3.0, 1.0)
 	_impacts.append({"p": sparkle, "ring": 0.8})
-	_add_steam(int(34 * more), 0.85, 3.6)
+	_add_steam(int(18 * more), 0.8, 3.6)
 
 
 # =====================================================================================
 # Building blocks
 # =====================================================================================
 func _add_steam(amount: int, size: float, rise: float) -> void:
-	## Clouds of steam boiling up off the ice where the heat lands.
-	var p := _puffs([Color(0.8, 0.84, 0.9, 0.0), Color(0.82, 0.86, 0.92, 0.85), Color(0.88, 0.91, 0.96, 0.45),
-		Color(0.95, 0.97, 1.0, 0.0)], amount, false, [0.0, 0.1, 0.55, 1.0])
-	_spray(p, 30.0, rise * 0.6, rise * 1.2, 2.0, 2.0)
+	## Cartoon clouds of steam boiling up off the ice where the heat lands: white
+	## on top, blue-grey underneath, thinning out as they rise.
+	var p := _toon(amount, false, {"col_core": Color.WHITE, "col_mid": Color(0.9, 0.94, 1.0),
+		"col_edge": Color(0.6, 0.72, 0.9), "lump": 0.4, "erode": 1.0, "shade": 0.55, "band_mid": 0.12,
+		"band_core": 0.34, "churn": 0.25, "alpha": 0.94, "gain": 1.3})
+	_spray(p, 30.0, rise * 0.6, rise * 1.2, 2.0, 1.7)
 	p.damping_min = 0.5
 	p.damping_max = 1.0
-	p.scale_amount_curve = _curve(0.35, 1.0)
+	p.scale_amount_curve = _curve(0.4, 1.0)
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	_impacts.append({"p": p, "area": 0.3, "size": size * 1.3, "lift": 0.2})
+	_impacts.append({"p": p, "area": 0.3, "size": size * 1.1, "lift": 0.2})
 
 
 func _spray(p: CPUParticles3D, spread: float, v_min: float, v_max: float, up: float, life: float) -> void:
@@ -453,22 +508,49 @@ func _spray(p: CPUParticles3D, spread: float, v_min: float, v_max: float, up: fl
 
 
 func _add_cone(kind: String, near: Color, far: Color, params: Dictionary) -> void:
-	## A flame ("flame": its own length at the nozzle) or a beam ("beam": nozzle to ice, as
-	## wide as `width` times the heat zone where it lands).
+	## A soft glow: a "beam" from the nozzle to the ice, as wide as `width` times the heat
+	## zone where it lands (or a "flame": its own length at the nozzle).
 	var mi := _cone_mesh(CONE_SHADER, near, far)
+	_cones.append(_cone_entry(mi, kind, params, 0.6))
+
+
+func _add_wind(mid: Color, rim: Color, params: Dictionary) -> void:
+	## Brush strokes rushing from the nozzle to the ice (wind_lines.gdshader). `line` is
+	## how thick they are; the rest are the shader's own settings.
+	var mi := _fx_mesh(WIND_SHADER)
 	var m := mi.material_override as ShaderMaterial
-	var entry := {"mi": mi, "kind": kind, "strength": params.get("strength", 0.6)}
+	m.set_shader_parameter("color", mid)
+	m.set_shader_parameter("color_rim", rim)
+	m.set_shader_parameter("width", params.get("line", 0.03))
+	_cones.append(_cone_entry(mi, "beam", params, 1.0))
+
+
+func _add_flame(core: Color, mid: Color, edge: Color, params: Dictionary) -> void:
+	## A cartoon flame at the nozzle (toon_flame.gdshader), `len` long.
+	var mi := _fx_mesh(FLAME_SHADER)
+	var m := mi.material_override as ShaderMaterial
+	m.set_shader_parameter("noise", noise_texture())
+	m.set_shader_parameter("col_core", core)
+	m.set_shader_parameter("col_mid", mid)
+	m.set_shader_parameter("col_edge", edge)
+	_cones.append(_cone_entry(mi, "flame", params, 1.0))
+
+
+func _cone_entry(mi: MeshInstance3D, kind: String, params: Dictionary, strength: float) -> Dictionary:
+	## Hands `params` to the shader, except the ones update() works out each frame.
+	var m := mi.material_override as ShaderMaterial
+	var entry := {"mi": mi, "kind": kind, "strength": params.get("strength", strength)}
 	for k in params:
 		match k:
 			"width", "len", "flicker":
 				entry[k] = params[k]
-			"strength":
+			"strength", "line":
 				pass
 			_:
 				m.set_shader_parameter(k, params[k])
 	if kind == "flame":
 		m.set_shader_parameter("len", params.get("len", 0.5))
-	_cones.append(entry)
+	return entry
 
 
 func _add_column(near: Color, far: Color, width: float, strength: float, stripes: float) -> void:
@@ -487,13 +569,20 @@ func _add_column(near: Color, far: Color, width: float, strength: float, stripes
 
 
 func _cone_mesh(shader: Shader, near: Color, far: Color) -> MeshInstance3D:
+	var mi := _fx_mesh(shader)
+	var m := mi.material_override as ShaderMaterial
+	m.set_shader_parameter("noise", noise_texture())
+	m.set_shader_parameter("color_start", Vector3(near.r, near.g, near.b))
+	m.set_shader_parameter("color_end", Vector3(far.r, far.g, far.b))
+	return mi
+
+
+func _fx_mesh(shader: Shader) -> MeshInstance3D:
+	## The unit tube with `shader` on it, which gives it its shape.
 	var mi := MeshInstance3D.new()
 	mi.mesh = _tube_mesh()
 	var m := ShaderMaterial.new()
 	m.shader = shader
-	m.set_shader_parameter("noise", noise_texture())
-	m.set_shader_parameter("color_start", Vector3(near.r, near.g, near.b))
-	m.set_shader_parameter("color_end", Vector3(far.r, far.g, far.b))
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.top_level = true
@@ -516,27 +605,23 @@ func _particles(amount: int) -> CPUParticles3D:
 	return p
 
 
-func _puffs(colors: Array, amount: int, on_top: bool = true, offsets: Array = []) -> CPUParticles3D:
-	## Soft lumpy puffs that turn as they go: fire, smoke, steam, hot air. on_top:
-	## drawn over the snow (what flies from the nozzle; see tool_cone.gdshader).
+func _toon(amount: int, on_top: bool, params: Dictionary, priority: int = 0) -> CPUParticles3D:
+	## Cartoon puffs (toon_puff.gdshaderinc): fire, steam, snow. `params` are the shader's
+	## colours and settings. on_top: drawn over the snow (what flies from the nozzle; see
+	## tool_cone.gdshader). priority: higher is drawn over lower (a fire's hot heart).
 	var p := _particles(amount)
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	m.billboard_keep_scale = true
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.no_depth_test = on_top
-	m.vertex_color_use_as_albedo = true
-	m.albedo_texture = puff_texture()
+	var m := ShaderMaterial.new()
+	m.shader = PUFF_TOP_SHADER if on_top else PUFF_SHADER
+	m.render_priority = priority
+	m.set_shader_parameter("noise", noise_texture())
+	for k in params:
+		m.set_shader_parameter(k, params[k])
 	quad.material = m
 	p.mesh = quad
-	p.color_ramp = _ramp(colors, offsets)
-	p.angle_min = -180.0
-	p.angle_max = 180.0
-	p.angular_velocity_min = -70.0
-	p.angular_velocity_max = 70.0
+	p.anim_offset_min = 0.0   # a random number for the shader: a different shape each
+	p.anim_offset_max = 1.0
 	return p
 
 
@@ -555,27 +640,6 @@ func _sparks(colors: Array, width: float, stretch: float, amount: int) -> CPUPar
 	p.color_ramp = _ramp(colors)
 	p.scale_amount_min = width * 0.7
 	p.scale_amount_max = width * 1.3
-	return p
-
-
-func _rings(colors: Array, amount: int, inner: float, on_top: bool, offsets: Array = []) -> CPUParticles3D:
-	## Rings flying along, square to the way they go (hot air, shockwaves).
-	var p := _particles(amount)
-	p.particle_flag_align_y = true
-	var torus := TorusMesh.new()
-	torus.inner_radius = inner
-	torus.outer_radius = 1.0
-	torus.rings = 28
-	torus.ring_segments = 6
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	m.no_depth_test = on_top
-	m.vertex_color_use_as_albedo = true
-	torus.material = m
-	p.mesh = torus
-	p.color_ramp = _ramp(colors, offsets)
 	return p
 
 
@@ -638,28 +702,6 @@ static func _curve(a: float, b: float) -> Curve:
 	return c
 
 
-static func puff_texture() -> Texture2D:
-	## A soft, lumpy puff (fire, smoke, steam, hot air): a round blob with cloudy
-	## noise in it. Built from an Image with mipmaps (see UiTheme.soft_dot()).
-	if _puff == null:
-		var n := 64
-		var fn := FastNoiseLite.new()
-		fn.seed = 7
-		fn.frequency = 0.08
-		fn.fractal_octaves = 3
-		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-		for y in n:
-			for x in n:
-				var d := Vector2(x + 0.5 - n * 0.5, y + 0.5 - n * 0.5).length() / (n * 0.5)
-				var r := clampf(1.0 - d, 0.0, 1.0)
-				var soft := r * r * (3.0 - 2.0 * r)
-				var cloud := clampf(0.6 + 0.9 * fn.get_noise_2d(x, y), 0.15, 1.0)
-				img.set_pixel(x, y, Color(1, 1, 1, clampf(soft * cloud * 1.25, 0.0, 1.0)))
-		img.generate_mipmaps()
-		_puff = ImageTexture.create_from_image(img)
-	return _puff
-
-
 static func noise_texture() -> Texture2D:
 	## Seamless cloudy noise for the flames and beams to scroll along.
 	if _noise == null:
@@ -674,12 +716,11 @@ static func noise_texture() -> Texture2D:
 	return _noise
 
 
-static func _tube_mesh() -> ArrayMesh:
+static func _tube_mesh(rows: int = 12) -> ArrayMesh:
 	## A unit tube: x, y round it (radius 1), UV.x round it, UV.y = 0..1 along it.
-	## The cone shader gives it its length and widths.
-	if _tube == null:
+	## The shader on it gives it its length and widths.
+	if not _tubes.has(rows):
 		var seg := 16
-		var rows := 12
 		var verts := PackedVector3Array()
 		var norms := PackedVector3Array()
 		var uvs := PackedVector2Array()
@@ -702,9 +743,10 @@ static func _tube_mesh() -> ArrayMesh:
 		arr[Mesh.ARRAY_NORMAL] = norms
 		arr[Mesh.ARRAY_TEX_UV] = uvs
 		arr[Mesh.ARRAY_INDEX] = idx
-		_tube = ArrayMesh.new()
-		_tube.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	return _tube
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		_tubes[rows] = mesh
+	return _tubes[rows]
 
 
 static var _strip: ArrayMesh
