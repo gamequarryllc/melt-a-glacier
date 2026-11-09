@@ -65,6 +65,7 @@ jobs:
           test -s build/web/index.wasm
           # The privacy policy the stores link to lives next to the game.
           cp docs/privacy.html build/web/privacy.html
+          cp docs/support.html build/web/support.html
           ls -la build/web
 
       - name: Upload the build for Pages
