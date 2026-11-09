@@ -1,11 +1,12 @@
 class_name TouchControls
 extends Control
 ## Multi-touch phone controls, drawn on top of the game:
-## left side = floating joystick, right side = drag to look,
+## left side = joystick (it stays in its corner), right side = drag to look,
 ## MELT button = hold to melt (dragging from it also turns the view),
 ## JUMP button = tap to jump, keep holding to fly with the jetpack.
 ## In the shed, while you look at something for sale, the MELT button turns
-## into a BUY (or HIRE, OPEN...) button: see set_action().
+## into a BUY (or HIRE, OPEN...) button: see set_action(). Tapping the price on
+## the card (`action_tag`) does the same.
 ## Godot's Buttons only see the first finger, so all of this reads raw touches,
 ## and on-screen buttons registered in `buttons` are tapped from here too.
 ##
@@ -37,6 +38,7 @@ var exclusions: Array[Control] = []   # other controls the touch controls must l
 var action_text := ""                 # set: the melt button is a shop button with this word on it
 var action_sub := ""                  # a smaller line under it (the price)
 var action_ok := false                # green when pressing it does something
+var action_tag: Control               # the price stamp on the shop card: tapping it is the shop button too
 
 var _stick_finger := NONE
 var _stick_origin := Vector2.ZERO
@@ -124,6 +126,21 @@ func _excluded(pos: Vector2) -> bool:
 	return false
 
 
+func _on_action_tag(pos: Vector2) -> bool:
+	return action_text != "" and is_instance_valid(action_tag) and action_tag.is_visible_in_tree() \
+		and action_tag.get_global_rect().grow(22.0).has_point(pos)
+
+
+func _stick_vector() -> void:
+	var d := _stick_pos - _stick_origin
+	var v := Vector2(d.x, -d.y) / STICK_RADIUS
+	var m := v.length()
+	if m < STICK_DEAD:
+		move_vector = Vector2.ZERO
+	else:
+		move_vector = v / m * minf(1.0, (m - STICK_DEAD) / (1.0 - STICK_DEAD))
+
+
 func _button_at(pos: Vector2) -> Dictionary:
 	for b in buttons:
 		var c: Control = b.control
@@ -159,6 +176,12 @@ func _on_touch(event: InputEventScreenTouch) -> void:
 		return
 	if _excluded(pos):
 		return
+	if _on_action_tag(pos):
+		# The green price on the card reads as the button to press: it is one.
+		_action_queued = true
+		_flash(action_tag)
+		get_viewport().set_input_as_handled()
+		return
 	if pos.distance_to(melt_center()) <= MELT_RADIUS + 25.0:
 		_release(_melt_finger)
 		_melt_finger = i
@@ -173,12 +196,14 @@ func _on_touch(event: InputEventScreenTouch) -> void:
 		_jump_queued = true
 	elif pos.x < size.x * STICK_ZONE:
 		# The left side is always the stick. A second finger there takes it
-		# over instead of turning the camera.
+		# over instead of turning the camera. The stick itself never moves:
+		# a thumb on it pushes from its middle, a thumb anywhere else on the
+		# left pushes from where it landed.
 		_release(_stick_finger)
 		_stick_finger = i
-		_stick_origin = pos
+		_stick_origin = stick_home() if pos.distance_to(stick_home()) <= STICK_RADIUS * 1.5 else pos
 		_stick_pos = pos
-		move_vector = Vector2.ZERO
+		_stick_vector()
 	else:
 		_release(_look_finger)
 		_look_finger = i
@@ -255,16 +280,7 @@ func _on_drag(event: InputEventScreenDrag) -> void:
 	_last[i] = pos
 	if i == _stick_finger:
 		_stick_pos = pos
-		var d := _stick_pos - _stick_origin
-		if d.length() > STICK_RADIUS:
-			_stick_origin += d - d.normalized() * STICK_RADIUS   # the base follows your thumb
-			d = _stick_pos - _stick_origin
-		var v := Vector2(d.x, -d.y) / STICK_RADIUS
-		var m := v.length()
-		if m < STICK_DEAD:
-			move_vector = Vector2.ZERO
-		else:
-			move_vector = v / m * minf(1.0, (m - STICK_DEAD) / (1.0 - STICK_DEAD))
+		_stick_vector()
 		queue_redraw()
 	elif i == _look_finger or i == _melt_finger:
 		var len := step.length()
@@ -295,8 +311,11 @@ func _disc(center: Vector2, radius: float, tint: Color) -> void:
 func _draw() -> void:
 	var font := UiTheme.display_font()
 	# Joystick: a wooden hoop with a knob.
-	var base := _stick_origin if _stick_finger != NONE else stick_home()
-	var knob := _stick_pos if _stick_finger != NONE else base
+	# The hoop stays in its corner; only the knob moves, and never past the rim.
+	var base := stick_home()
+	var knob := base
+	if _stick_finger != NONE:
+		knob = base + (_stick_pos - _stick_origin).limit_length(STICK_RADIUS)
 	var a := 0.95 if _stick_finger != NONE else 0.6
 	var rr := STICK_RADIUS * 256.0 / 224.0
 	draw_texture_rect(UiTheme.tex("stick_ring"), Rect2(base - Vector2(rr, rr), Vector2(rr, rr) * 2.0), false, Color(1, 1, 1, a))

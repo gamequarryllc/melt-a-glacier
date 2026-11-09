@@ -119,6 +119,10 @@ func _run() -> void:
 	_touch(1, Vector2(200, touch.size.y - 160), true)
 	_drag(1, Vector2(200, touch.size.y - 240), Vector2(0, -80))
 	check(touch.move_vector.y > 0.8, "pushing the stick up walks forward (%s)" % touch.move_vector)
+	_drag(1, Vector2(520, touch.size.y - 420), Vector2(320, -180))
+	check(touch._stick_origin == touch.stick_home() and touch.move_vector.length() > 0.99,
+		"the stick stays in its corner when the thumb slides away (%s)" % touch._stick_origin)
+	_drag(1, Vector2(200, touch.size.y - 240), Vector2(-320, 180))
 	var yaw0: float = player.yaw
 	_touch(2, Vector2(touch.size.x * 0.6, 200), true)
 	_drag(2, Vector2(touch.size.x * 0.6 + 60, 200), Vector2(60, 0))
@@ -259,6 +263,19 @@ func _run() -> void:
 	check(int(world._aimed.get("index", -1)) == lamp.index and hud.shop_card.visible
 		and hud._card_title.text.contains("Heat Lamp"), "looking at the Heat Lamp shows its card (%s)" % hud._card_title.text)
 	check(touch.action_text == "BUY" and touch.action_ok, "the 🔥 button turned into BUY (%s %s)" % [touch.action_text, touch.action_sub])
+	# The green price on the card looks like the button to press: it must buy,
+	# not land on JUMP next to it (it did on an iPhone).
+	var stamp: Rect2 = hud._card_stamp.get_global_rect()
+	var jump_left: float = touch.jump_center().x - touch.JUMP_RADIUS - 25.0
+	check(hud.shop_card.get_global_rect().end.x < jump_left,
+		"the price card keeps clear of JUMP (card ends %.0f, JUMP starts %.0f)" % [hud.shop_card.get_global_rect().end.x, jump_left])
+	check(hud.shop_card.get_global_rect().position.x > touch.stick_home().x + touch.STICK_RADIUS, "and of the MOVE stick")
+	_touch(0, stamp.get_center(), true)
+	check(touch._action_queued and not touch._jump_queued and not touch.jump_held and not touch.melting,
+		"tapping the price on the card is the BUY button, not a jump")
+	_touch(0, stamp.get_center(), false)
+	touch.take_action()
+	touch.take_jump()
 	_touch(0, touch.melt_center(), true)
 	_touch(0, touch.melt_center(), false)
 	await _frames(2)

@@ -101,6 +101,7 @@ func _ready() -> void:
 	_build_shop_card()
 	touch = TouchControls.new()
 	root.add_child(touch)
+	touch.action_tag = _card_stamp
 	# Tappable with any finger, even while the other thumb is on the stick.
 	touch.buttons = [
 		{"control": respawn_button, "action": _on_respawn_pressed},
@@ -122,6 +123,7 @@ func _ready() -> void:
 	_build_rotate_overlay()
 	_apply_safe_area()
 	get_viewport().size_changed.connect(_apply_safe_area)
+	get_viewport().size_changed.connect(_place_shop_card)
 	# Phones (the iPhone browser included) start in touch mode, so nothing
 	# says "Press B" or "click" there; a mouse click switches to the PC hints.
 	set_touch_mode(DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
@@ -167,6 +169,7 @@ func set_touch_mode(on: bool) -> void:
 	# version would also fire from the first finger, so it's switched off.
 	for b in touch.buttons:
 		(b.control as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE if on else Control.MOUSE_FILTER_STOP
+	_place_shop_card()
 
 
 func _on_respawn_pressed() -> void:
@@ -424,6 +427,22 @@ func _apply_safe_area() -> void:
 	for c in [popups, rotate_overlay, _catalogue]:
 		if is_instance_valid(c):
 			_fill_screen(c)
+	_place_shop_card()
+
+
+func _place_shop_card() -> void:
+	## The price card sits bottom centre. On a phone it keeps clear of the JUMP
+	## button (so a tap on the card never lands on JUMP) and of the MOVE stick,
+	## sliding left and, on narrow screens, getting a little narrower.
+	var w := get_viewport().get_visible_rect().size.x - safe_inset.position.x - safe_inset.size.x
+	var left := w * 0.5 - 340.0
+	var right := w * 0.5 + 340.0
+	if touch_mode:
+		right = minf(right, w - 315.0 - (TouchControls.JUMP_RADIUS + 25.0) - 14.0)   # JUMP's touch area starts here
+		left = maxf(right - 680.0, 170.0 + TouchControls.STICK_RADIUS + 22.0)       # the stick's hoop ends here
+	shop_card.offset_left = left - w * 0.5
+	shop_card.offset_right = right - w * 0.5
+	_card_body.custom_minimum_size = Vector2(right - left - 40.0, 0)
 
 
 func _fill_screen(c: Control) -> void:
