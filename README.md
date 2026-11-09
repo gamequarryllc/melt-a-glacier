@@ -128,6 +128,7 @@ shaders/                 ice, mountain rock and snow, the valley floor, grass, s
 fonts/                   subset Noto Color Emoji (the placeholder art) + license
 tests/smoke_test.gd      headless test: godot --headless -s res://tests/smoke_test.gd
 tests/screenshots.gd     renders screenshots of key moments (see the top of the file)
+tests/store_shots.gd     renders the App Store screenshots (iPhone 6.9") and the purchases' review screenshot
 tests/field_bench.gd     timing benchmark for the ice (build, re-mesh, melt rate)
 tests/pacing.gd          a bot plays a whole run and prints how long each part took
 tools/subset_emoji.sh    rebuild the emoji font if you add new emoji
