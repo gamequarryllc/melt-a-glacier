@@ -160,7 +160,11 @@ func _input(event: InputEvent) -> void:
 
 func _on_touch(event: InputEventScreenTouch) -> void:
 	var i := event.index
-	var pos := event.position
+	var at := event.position   # where on the screen: for the HUD's own buttons
+	# Where on this control. The HUD is moved in from the screen's edges on
+	# phones with a notch, and the buttons below are placed (and drawn) from
+	# this control's corner, not the screen's.
+	var pos := at - global_position
 	# A new touch with an index we still hold means its lift-off got lost
 	# (browsers can drop touchend): let go of it first.
 	_release(i)
@@ -168,15 +172,15 @@ func _on_touch(event: InputEventScreenTouch) -> void:
 		queue_redraw()
 		return
 	_drop_lost_fingers(i)
-	var b := _button_at(pos)
+	var b := _button_at(at)
 	if not b.is_empty():
 		_flash(b.control)
 		b.action.call()
 		get_viewport().set_input_as_handled()
 		return
-	if _excluded(pos):
+	if _excluded(at):
 		return
-	if _on_action_tag(pos):
+	if _on_action_tag(at):
 		# The green price on the card reads as the button to press: it is one.
 		_action_queued = true
 		_flash(action_tag)
@@ -275,7 +279,7 @@ func _on_drag(event: InputEventScreenDrag) -> void:
 	var i := event.index
 	if not _last.has(i):
 		return
-	var pos := event.position
+	var pos := event.position - global_position
 	var step: Vector2 = pos - _last[i]
 	_last[i] = pos
 	if i == _stick_finger:

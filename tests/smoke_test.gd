@@ -180,6 +180,32 @@ func _run() -> void:
 	await _frames(1)
 	check(player.position.distance_to(world.SPAWN) < 0.6, "respawn button (second finger) puts you back at the start")
 	touch.release_all()
+	# On an iPhone the HUD sits inside the notch margins. A tap has to land on
+	# the button where it is drawn (taps on JUMP used to turn the heat on).
+	world.hud.set_safe_inset(Rect2(96.5, 0.0, 96.5, 34.4))
+	await _frames(2)
+	var shift: Vector2 = touch.global_position
+	check(absf(shift.x - 96.5) < 0.5, "the notch margin moves the phone buttons in (%s)" % shift)
+	_touch(9, shift + touch.jump_center(), true)
+	check(touch.jump_held and not touch.melting, "with the margin, a tap on JUMP is a jump")
+	_touch(9, shift + touch.jump_center(), false)
+	touch.take_jump()
+	_touch(9, shift + touch.melt_center(), true)
+	check(touch.melting and not touch.jump_held, "and a tap on the heat button is heat")
+	_touch(9, shift + touch.melt_center(), false)
+	_touch(9, shift + touch.stick_home(), true)
+	_drag(9, shift + touch.stick_home() + Vector2(0, -80), Vector2(0, -80))
+	check(touch.move_vector.y > 0.8 and absf(touch.move_vector.x) < 0.05, "and the stick pushes straight (%s)" % touch.move_vector)
+	_touch(9, shift + touch.stick_home() + Vector2(0, -80), false)
+	_touch(9, world.hud.catalogue_button.get_global_rect().get_center(), true)
+	check(world.hud.catalogue_open, "and the Catalogue button opens the catalogue")
+	world.hud.close_catalogue()
+	world.hud.set_safe_inset(Rect2())
+	for _i in 120:   # the corner buttons come back with the HUD's next refresh
+		await _frames(1)
+		if world.hud.respawn_button.is_visible_in_tree():
+			break
+	touch.release_all()
 	# Jetpack: hold jump to fly up, fuel runs down, landing refills it.
 	player.position = Vector3(world.SPAWN.x, 0.0, world.SPAWN.z)
 	player.velocity = Vector3.ZERO

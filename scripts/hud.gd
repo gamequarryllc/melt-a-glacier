@@ -480,7 +480,13 @@ func _apply_safe_area() -> void:
 		return
 	var window := Vector2(DisplayServer.window_get_size())
 	var safe := Rect2(DisplayServer.get_display_safe_area())
-	safe_inset = safe_area_inset(window, safe, get_viewport().get_visible_rect().size)
+	set_safe_inset(safe_area_inset(window, safe, get_viewport().get_visible_rect().size))
+
+
+func set_safe_inset(inset: Rect2) -> void:
+	## Moves the whole HUD in from the screen's edges (left, top as position;
+	## right, bottom as size).
+	safe_inset = inset
 	root.offset_left = safe_inset.position.x
 	root.offset_top = safe_inset.position.y
 	root.offset_right = -safe_inset.size.x
