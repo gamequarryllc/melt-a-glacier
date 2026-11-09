@@ -40,6 +40,7 @@ var toast_box: VBoxContainer
 var popups: Control
 var rotate_overlay: Control
 var shop_card: PanelContainer      # what you're looking at in the shed, and its price
+var safe_inset := Rect2()          # notch / home-bar margins in HUD units: position = left, top; size = right, bottom
 
 var _card_title: Label
 var _card_body: Label
@@ -119,6 +120,8 @@ func _ready() -> void:
 	popups.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(popups)
 	_build_rotate_overlay()
+	_apply_safe_area()
+	get_viewport().size_changed.connect(_apply_safe_area)
 	# Phones (the iPhone browser included) start in touch mode, so nothing
 	# says "Press B" or "click" there; a mouse click switches to the PC hints.
 	set_touch_mode(DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
@@ -386,6 +389,55 @@ func _build_bottom() -> void:
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint_label.text = "Click to play\nWASD move · mouse look · hold left click to melt · Space jump (hold to fly)\nWalk into the 🏠 shed to shop · C catalogue · R respawn · Esc frees the mouse"
 	root.add_child(hint_label)
+
+
+static func safe_area_inset(window: Vector2, safe: Rect2, view: Vector2) -> Rect2:
+	## The parts of the screen the notch / Dynamic Island and home bar cover, in
+	## HUD units (left, top as position; right, bottom as size). Empty when the
+	## whole screen is safe or the numbers make no sense.
+	if window.x <= 0.0 or window.y <= 0.0 or safe.size.x <= 0.0 or safe.size.y <= 0.0:
+		return Rect2()
+	var k := Vector2(view.x / window.x, view.y / window.y)
+	var l := maxf(safe.position.x, 0.0) * k.x
+	var t := maxf(safe.position.y, 0.0) * k.y
+	var r := maxf(window.x - safe.end.x, 0.0) * k.x
+	var b := maxf(window.y - safe.end.y, 0.0) * k.y
+	# Keep the HUD centred: the notch side and the far side get the same margin.
+	l = maxf(l, r)
+	r = l
+	return Rect2(l, t, r, b)
+
+
+func _apply_safe_area() -> void:
+	## On iPhones the notch / Dynamic Island and the home bar cover the screen
+	## edges in landscape: keep every button and label inside the safe area,
+	## while the full-screen dims still reach the edges.
+	if not (OS.has_feature("mobile") or OS.has_feature("ios")):
+		return
+	var window := Vector2(DisplayServer.window_get_size())
+	var safe := Rect2(DisplayServer.get_display_safe_area())
+	safe_inset = safe_area_inset(window, safe, get_viewport().get_visible_rect().size)
+	root.offset_left = safe_inset.position.x
+	root.offset_top = safe_inset.position.y
+	root.offset_right = -safe_inset.size.x
+	root.offset_bottom = -safe_inset.size.y
+	for c in [popups, rotate_overlay, _catalogue]:
+		if is_instance_valid(c):
+			_fill_screen(c)
+
+
+func _fill_screen(c: Control) -> void:
+	## A child of `root` that should still cover the notch strips (dim backdrops).
+	c.offset_left = -safe_inset.position.x
+	c.offset_top = -safe_inset.position.y
+	c.offset_right = safe_inset.size.x
+	c.offset_bottom = safe_inset.size.y
+	if c == _catalogue and c.get_child_count() > 0:
+		var panel := c.get_child(0) as Control
+		panel.offset_left = 70 + safe_inset.position.x
+		panel.offset_right = -70 - safe_inset.size.x
+		panel.offset_top = 26 + safe_inset.position.y
+		panel.offset_bottom = -26 - safe_inset.size.y
 
 
 func _build_rotate_overlay() -> void:
@@ -871,6 +923,7 @@ func open_catalogue() -> void:
 	panel.offset_bottom = -26
 	panel.add_theme_stylebox_override("panel", _paper(PAPER, 5, 12, 22))
 	_catalogue.add_child(panel)
+	_fill_screen(_catalogue)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)

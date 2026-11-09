@@ -657,6 +657,12 @@ func _sound(world, player) -> void:
 	sound.set_music_volume(0.3)
 	check(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music")) < -8.0, "the music volume setting turns the Music bus down")
 	sound.set_music_volume(mv)
+	# iPhone in landscape (2868 x 1320 px): notch side 177 px, home bar 63 px.
+	var inset: Rect2 = load("res://scripts/hud.gd").safe_area_inset(Vector2(2868, 1320), Rect2(177, 0, 2868 - 177, 1320 - 63), Vector2(1564, 720))
+	check(absf(inset.position.x - 96.5) < 0.5 and absf(inset.size.x - 96.5) < 0.5 and absf(inset.size.y - 34.4) < 0.5,
+		"the HUD keeps clear of the iPhone notch and home bar (%s)" % inset)
+	check(load("res://scripts/hud.gd").safe_area_inset(Vector2(1280, 720), Rect2(0, 0, 1280, 720), Vector2(1280, 720)) == Rect2(),
+		"no margins where the whole screen is safe")
 
 
 func _ad_offers(gs, hud, player) -> void:
