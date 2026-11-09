@@ -26,9 +26,13 @@ changes there, change `HOUSES` in `build_village.py` to match and rebuild.
 
 ## HUD (`art/ui/make_ui.py` -> `ui/*.png`)
 
-Pillow draws the wooden sign, paper sheet, enamel buttons, progress bar and
-round phone buttons as nine-patch images. Grey parts are tinted in the game
-(`UiTheme.enamel(color)`), so one button image makes every colour.
+Pillow draws the wooden plaque, paper sheet, painted-board buttons (cut
+corners, no gloss), the hanging price tag, progress bar and round phone
+buttons as nine-patch images. Grey parts are tinted in the game
+(`UiTheme.enamel(color)`, `UiTheme.tag(color)`), so one image makes every
+colour. It also draws the inked icons in `ui/icon/` (`UiTheme.icon("drop")`):
+the HUD uses those instead of emoji, so add an icon there rather than typing
+an emoji into a HUD string. `UiTheme.plain()` strips emoji from toasts and hints.
 
 Fonts (SIL Open Font License, in `fonts/`): Lilita One for titles and
 buttons, Nunito ExtraBold for everything else.

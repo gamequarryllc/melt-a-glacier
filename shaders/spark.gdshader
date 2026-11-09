@@ -6,6 +6,7 @@ shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled, world_vertex_coords;
 
 uniform float stretch = 5.0;   // how many times longer than wide
+uniform float gain = 1.0;     // above 1: brighter than the daylight
 uniform sampler2D tex : source_color, filter_linear_mipmap;
 
 void vertex() {
@@ -19,6 +20,6 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = COLOR.rgb;
+	ALBEDO = COLOR.rgb * gain;
 	ALPHA = COLOR.a * texture(tex, UV).a;
 }

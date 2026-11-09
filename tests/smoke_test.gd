@@ -119,6 +119,10 @@ func _run() -> void:
 	_touch(1, Vector2(200, touch.size.y - 160), true)
 	_drag(1, Vector2(200, touch.size.y - 240), Vector2(0, -80))
 	check(touch.move_vector.y > 0.8, "pushing the stick up walks forward (%s)" % touch.move_vector)
+	_drag(1, Vector2(520, touch.size.y - 420), Vector2(320, -180))
+	check(touch._stick_origin == touch.stick_home() and touch.move_vector.length() > 0.99,
+		"the stick stays in its corner when the thumb slides away (%s)" % touch._stick_origin)
+	_drag(1, Vector2(200, touch.size.y - 240), Vector2(-320, 180))
 	var yaw0: float = player.yaw
 	_touch(2, Vector2(touch.size.x * 0.6, 200), true)
 	_drag(2, Vector2(touch.size.x * 0.6 + 60, 200), Vector2(60, 0))
@@ -175,6 +179,32 @@ func _run() -> void:
 	_touch(7, rb.get_global_rect().get_center(), true)
 	await _frames(1)
 	check(player.position.distance_to(world.SPAWN) < 0.6, "respawn button (second finger) puts you back at the start")
+	touch.release_all()
+	# On an iPhone the HUD sits inside the notch margins. A tap has to land on
+	# the button where it is drawn (taps on JUMP used to turn the heat on).
+	world.hud.set_safe_inset(Rect2(96.5, 0.0, 96.5, 34.4))
+	await _frames(2)
+	var shift: Vector2 = touch.global_position
+	check(absf(shift.x - 96.5) < 0.5, "the notch margin moves the phone buttons in (%s)" % shift)
+	_touch(9, shift + touch.jump_center(), true)
+	check(touch.jump_held and not touch.melting, "with the margin, a tap on JUMP is a jump")
+	_touch(9, shift + touch.jump_center(), false)
+	touch.take_jump()
+	_touch(9, shift + touch.melt_center(), true)
+	check(touch.melting and not touch.jump_held, "and a tap on the heat button is heat")
+	_touch(9, shift + touch.melt_center(), false)
+	_touch(9, shift + touch.stick_home(), true)
+	_drag(9, shift + touch.stick_home() + Vector2(0, -80), Vector2(0, -80))
+	check(touch.move_vector.y > 0.8 and absf(touch.move_vector.x) < 0.05, "and the stick pushes straight (%s)" % touch.move_vector)
+	_touch(9, shift + touch.stick_home() + Vector2(0, -80), false)
+	_touch(9, world.hud.catalogue_button.get_global_rect().get_center(), true)
+	check(world.hud.catalogue_open, "and the Catalogue button opens the catalogue")
+	world.hud.close_catalogue()
+	world.hud.set_safe_inset(Rect2())
+	for _i in 120:   # the corner buttons come back with the HUD's next refresh
+		await _frames(1)
+		if world.hud.respawn_button.is_visible_in_tree():
+			break
 	touch.release_all()
 	# Jetpack: hold jump to fly up, fuel runs down, landing refills it.
 	player.position = Vector3(world.SPAWN.x, 0.0, world.SPAWN.z)
@@ -259,6 +289,19 @@ func _run() -> void:
 	check(int(world._aimed.get("index", -1)) == lamp.index and hud.shop_card.visible
 		and hud._card_title.text.contains("Heat Lamp"), "looking at the Heat Lamp shows its card (%s)" % hud._card_title.text)
 	check(touch.action_text == "BUY" and touch.action_ok, "the 🔥 button turned into BUY (%s %s)" % [touch.action_text, touch.action_sub])
+	# The green price on the card looks like the button to press: it must buy,
+	# not land on JUMP next to it (it did on an iPhone).
+	var stamp: Rect2 = hud._card_stamp.get_global_rect()
+	var jump_left: float = touch.jump_center().x - touch.JUMP_RADIUS - 25.0
+	check(hud.shop_card.get_global_rect().end.x < jump_left,
+		"the price card keeps clear of JUMP (card ends %.0f, JUMP starts %.0f)" % [hud.shop_card.get_global_rect().end.x, jump_left])
+	check(hud.shop_card.get_global_rect().position.x > touch.stick_home().x + touch.STICK_RADIUS, "and of the MOVE stick")
+	_touch(0, stamp.get_center(), true)
+	check(touch._action_queued and not touch._jump_queued and not touch.jump_held and not touch.melting,
+		"tapping the price on the card is the BUY button, not a jump")
+	_touch(0, stamp.get_center(), false)
+	touch.take_action()
+	touch.take_jump()
 	_touch(0, touch.melt_center(), true)
 	_touch(0, touch.melt_center(), false)
 	await _frames(2)
@@ -300,6 +343,7 @@ func _run() -> void:
 	world.use_aimed()
 	await _frames(1)
 	check(hud.catalogue_open and hud._list_box.get_child_count() >= 4 and not player.input_enabled, "the catalogue opens")
+	check(hud.toast_box.get_index() > hud._catalogue.get_index(), "messages (like a failed purchase) show on top of the open catalogue")
 	root.push_input(key)
 	await _frames(1)
 	check(not hud.catalogue_open and player.input_enabled, "and closes again")
@@ -390,9 +434,9 @@ func _run() -> void:
 	world.helpers._update_volcano(0.0)
 	var kd: Dictionary = shed.describe(kevin)
 	var sign_text: String = world.helpers._kevin_sign.text
-	check(gs.helper_counts[2] == 3 and kd.action == "UPGRADE" and str(kd.title).contains("Lv 3")
+	check(gs.helper_counts[2] == 3 and kd.action == "UPGRADE" and str(kd.get("note", "")).contains("Lv 3")
 		and sign_text.contains("Lv 3") and (kevin.price as Label3D).text.begins_with("Lv 3"),
-		"buying him again levels him up (%s; his sign says %s)" % [kd.title, sign_text])
+		"buying him again levels him up (%s; his sign says %s)" % [kd.get("note", ""), sign_text])
 	var swarm = world.helpers
 	check(swarm.bomb_interval(3) < swarm.bomb_interval(1) and swarm.bomb_scale(3) > swarm.bomb_scale(1),
 		"each level throws bigger bombs, more often")
@@ -657,6 +701,12 @@ func _sound(world, player) -> void:
 	sound.set_music_volume(0.3)
 	check(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music")) < -8.0, "the music volume setting turns the Music bus down")
 	sound.set_music_volume(mv)
+	# iPhone in landscape (2868 x 1320 px): notch side 177 px, home bar 63 px.
+	var inset: Rect2 = load("res://scripts/hud.gd").safe_area_inset(Vector2(2868, 1320), Rect2(177, 0, 2868 - 177, 1320 - 63), Vector2(1564, 720))
+	check(absf(inset.position.x - 96.5) < 0.5 and absf(inset.size.x - 96.5) < 0.5 and absf(inset.size.y - 34.4) < 0.5,
+		"the HUD keeps clear of the iPhone notch and home bar (%s)" % inset)
+	check(load("res://scripts/hud.gd").safe_area_inset(Vector2(1280, 720), Rect2(0, 0, 1280, 720), Vector2(1280, 720)) == Rect2(),
+		"no margins where the whole screen is safe")
 
 
 func _ad_offers(gs, hud, player) -> void:

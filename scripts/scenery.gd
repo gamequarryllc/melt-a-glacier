@@ -6,11 +6,13 @@ extends RefCounted
 ## different valley gets its own mountains.
 
 const EXTENT := 230.0        # the mountains reach this far from the middle
-const SAMPLES := 120         # grid cells across; spacing grows with distance
+const SAMPLES := 150         # grid cells across; spacing grows with distance
 const WARP := 1.6            # how strongly the grid bunches up near the valley
 const CENTER_Z := -5.0       # the grid's middle (the valley isn't centred on z = 0)
 const HOLLOW_RADIUS := 14.0  # Kevin's flat spot (he's 20 m across)
 const GAP_RADIUS := 7.0      # half-width of the gap you see Kevin through
+const APRON_HEIGHT := 3.4    # the scree at the foot of the cliffs
+const NEAR_TREES := 6.0      # slope pines this close to the valley floor are the detailed ones
 
 
 # =====================================================================================
@@ -43,7 +45,10 @@ static func _axis(i: int) -> float:
 	return signf(u) * EXTENT * pow(absf(u), WARP)
 
 
-static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> MeshInstance3D:
+static var _hf := {}   # the mountains' heights as built: {xs, zs, h, n, v, hollow, gap_to}
+
+
+static func mountains(level: Dictionary, hollow: Vector2) -> MeshInstance3D:
 	## The ring of mountains around the valley as one mesh. `hollow` is a flat
 	## spot outside the valley (Kevin the volcano lives there), with a gap
 	## toward the glacier so you can see him.
@@ -54,7 +59,7 @@ static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> 
 	ridged.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	ridged.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	ridged.frequency = 0.012
-	ridged.fractal_octaves = 5
+	ridged.fractal_octaves = 4
 	var soft := FastNoiseLite.new()
 	soft.seed = seed_base + 42
 	soft.frequency = 0.007
@@ -64,6 +69,9 @@ static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> 
 	tint.frequency = 0.02
 	var gap_to := Vector2(-17.0, -24.0) if hollow.x < 0.0 else Vector2(17.0, -24.0)
 	var scale: float = v.get("peaks", 1.0)
+	# The waterfall runs down a gully in the back wall.
+	var falls_a: Vector2 = v.get("falls_top", Vector2.INF)
+	var falls_b: Vector2 = v.stream[1] if v.has("stream") else Vector2.INF
 
 	var n := SAMPLES + 1
 	var xs := PackedFloat32Array()
@@ -85,13 +93,20 @@ static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> 
 			var y := -1.5
 			if d > 0.0:
 				outside[k * n + i] = 1
-				var rise := 1.0 - exp(-d / 11.0)
 				var r := ridged.get_noise_2d(x, z) * 0.5 + 0.5
 				var s := soft.get_noise_2d(x, z) * 0.5 + 0.5
 				var top := 10.0 + 30.0 * r * r + 12.0 * s
 				top *= 1.0 + clampf((d - 25.0) / 90.0, 0.0, 1.0) * 0.9   # bigger further out
-				y = rise * top * scale - 0.6
+				# A grassy apron of scree at the foot, then the cliffs behind it.
+				var apron := APRON_HEIGHT * (1.0 - exp(-d / 4.5))
+				var apron_width := 3.5 + 6.0 * (soft.get_noise_2d(x * 3.0 + 200.0, z * 3.0) * 0.5 + 0.5)
+				var rise := 1.0 - exp(-maxf(d - apron_width, 0.0) / 10.0)
+				y = apron + rise * (top * scale - APRON_HEIGHT) - 0.6
+				if falls_a.is_finite():
+					var off := _segment_distance(Vector2(x, z), falls_a, falls_b)
+					y -= 1.6 * exp(-off * off / 6.0) * minf(1.0, d / 4.0)
 			h[k * n + i] = y
+	_hf = {"xs": xs, "zs": zs, "h": h, "n": n, "v": v, "hollow": hollow, "gap_to": gap_to}
 
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -99,8 +114,8 @@ static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> 
 	verts.resize(n * n)
 	normals.resize(n * n)
 	colors.resize(n * n)
-	var rock_a := Color(0.44, 0.41, 0.38)
-	var rock_b := Color(0.36, 0.37, 0.4)
+	var rock_a := Color(0.6, 0.55, 0.49)
+	var rock_b := Color(0.47, 0.49, 0.54)
 	for k in n:
 		for i in n:
 			var idx := k * n + i
@@ -123,7 +138,7 @@ static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> 
 			var c := a + n
 			var dd := c + 1
 			if outside[a] + outside[b] + outside[c] + outside[dd] == 0:
-				continue   # flat valley floor: the ground plane covers it
+				continue   # flat valley floor: the ground covers it
 			# Godot's front faces are clockwise seen from the front (above).
 			idxs.append_array([a, b, dd, a, dd, c])
 	var arrays := []
@@ -137,9 +152,13 @@ static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> 
 
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/mountain.gdshader")
-	mat.set_shader_parameter("detail_tex", detail)
+	mat.set_shader_parameter("rock_tex", rock_texture(seed_base))
 	mat.set_shader_parameter("snow_line", float(v.get("snow_line", 17.0)))
+	mat.set_shader_parameter("tree_line", float(v.get("tree_line", 12.0)))
+	mat.set_shader_parameter("facets", 0.7)
+	mat.set_shader_parameter("settle", 1.0)
 	mat.set_shader_parameter("glacier_source", Vector3(0.0, 0.0, float(v.back_z) - 7.0))
+	Ground.bind(level, mat, "mountains")
 	var mi := MeshInstance3D.new()
 	mi.name = "Mountains"
 	mi.mesh = mesh
@@ -148,18 +167,172 @@ static func mountains(level: Dictionary, hollow: Vector2, detail: Texture2D) -> 
 	return mi
 
 
+static func height_at(x: float, z: float) -> float:
+	## The ground's height at a spot: 0 on the valley floor, up the slopes as
+	## the mountains were built (call mountains() first).
+	if _hf.is_empty():
+		return 0.0
+	var n: int = _hf.n
+	var xs: PackedFloat32Array = _hf.xs
+	var zs: PackedFloat32Array = _hf.zs
+	var h: PackedFloat32Array = _hf.h
+	var i := clampi(_cell(x), 0, n - 2)
+	var k := clampi(_cell(z - CENTER_Z), 0, n - 2)
+	var fx := clampf((x - xs[i]) / (xs[i + 1] - xs[i]), 0.0, 1.0)
+	var fz := clampf((z - zs[k]) / (zs[k + 1] - zs[k]), 0.0, 1.0)
+	var ha := h[k * n + i]
+	var hb := h[k * n + i + 1]
+	var hc := h[(k + 1) * n + i]
+	var hd := h[(k + 1) * n + i + 1]
+	# Each cell is two triangles (a, b, d) and (a, d, c), as in the mesh.
+	var y := ha + (hb - ha) * fx + (hd - hb) * fz if fx >= fz else ha + (hd - hc) * fx + (hc - ha) * fz
+	return maxf(y, 0.0)
+
+
+static func _cell(m: float) -> int:
+	## The grid line at or below `m` metres from the grid's middle (see _axis).
+	var u := signf(m) * pow(absf(m) / EXTENT, 1.0 / WARP)
+	var i := int(floor((u + 1.0) * 0.5 * SAMPLES))
+	# pow() can land a hair either side of a grid line.
+	while i > 0 and _axis(i) > m:
+		i -= 1
+	while i < SAMPLES - 1 and _axis(i + 1) <= m:
+		i += 1
+	return i
+
+
+static func slope_normal(x: float, z: float) -> Vector3:
+	var e := 1.2
+	return Vector3(height_at(x - e, z) - height_at(x + e, z), 2.0 * e, height_at(x, z - e) - height_at(x, z + e)).normalized()
+
+
+static func slope_forest(level: Dictionary, count: int) -> Node3D:
+	## Pines on the aprons and ledges of the mountains, up to the tree line.
+	var v: Dictionary = level.valley
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(level.seed) + 91
+	var patches := FastNoiseLite.new()
+	patches.seed = int(level.seed) + 92
+	patches.frequency = 0.03
+	var tree_line := float(v.get("tree_line", 12.0))
+	var falls_a: Vector2 = v.get("falls_top", Vector2.INF)
+	var falls_b: Vector2 = v.stream[1] if v.has("stream") else Vector2.INF
+	var spots: Array = []
+	var far: Array = []
+	for _i in count * 30:
+		if spots.size() + far.size() >= count:
+			break
+		var x := rng.randf_range(-120.0, 120.0)
+		var z := rng.randf_range(-95.0, 125.0)
+		var d := floor_distance(v, x, z, _hf.hollow, _hf.gap_to)
+		if d < 1.2 or d > 60.0:
+			continue
+		if rng.randf() < d / 70.0:   # most of them close to the valley
+			continue
+		var y := height_at(x, z)
+		if y < 0.3 or y > tree_line + patches.get_noise_2d(x, z) * 4.0:
+			continue
+		if slope_normal(x, z).y < 0.74 or patches.get_noise_2d(x + 300.0, z) < -0.25:
+			continue
+		if falls_a.is_finite() and _segment_distance(Vector2(x, z), falls_a, falls_b) < 3.5:
+			continue
+		var spot := [Vector3(x, y - 0.25, z), rng.randf_range(0.9, 1.6) * (1.0 + minf(d, 40.0) / 60.0), rng.randf() * TAU]
+		if d < NEAR_TREES:
+			spots.append(spot)
+		else:
+			far.append(spot)
+	var f := forest(spots, false)
+	f.name = "SlopeForest"
+	# Further off, plainer trees: they're too small on screen to tell.
+	if not far.is_empty():
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = _far_pine_mesh()
+		mm.instance_count = far.size()
+		for i in far.size():
+			var sp: Array = far[i]
+			mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, float(sp[2])).scaled(Vector3.ONE * float(sp[1])), sp[0]))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.material_override = MeshKit.material()
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		f.add_child(mmi)
+	return f
+
+
+static var _far_pine: ArrayMesh
+
+
+static func _far_pine_mesh() -> ArrayMesh:
+	## A pine in a few dozen triangles: a trunk and three tiers, the size and
+	## colours of the real ones (art/blender/build_nature.py).
+	if _far_pine == null:
+		var st := MeshKit.begin()
+		MeshKit.cylinder(st, Vector3.ZERO, Vector3(0.0, 0.9, 0.0), 0.16, 0.13, Color(0.36, 0.2, 0.14), 5, false)
+		var green := Color(0.15, 0.32, 0.19)
+		# Each tier is a cone with its underside: you look up at these from the valley.
+		MeshKit.cylinder(st, Vector3(0.0, 0.7, 0.0), Vector3(0.0, 2.5, 0.0), 1.25, 0.0, green, 7)
+		MeshKit.cylinder(st, Vector3(0.0, 1.8, 0.0), Vector3(0.0, 3.4, 0.0), 0.95, 0.0, green.lightened(0.06), 7)
+		MeshKit.cylinder(st, Vector3(0.0, 2.8, 0.0), Vector3(0.0, 4.1, 0.0), 0.65, 0.0, green.lightened(0.12), 7)
+		_far_pine = MeshKit.finish(st)
+	return _far_pine
+
+
+static var _rock_tex := {}
+
+
+static func rock_texture(seed_base: int) -> ImageTexture:
+	## Detail for the rock shader. R = cracks (thin wandering lines), G = the
+	## rock's shade in soft-edged plates, B = big soft blotches. Tiles seamlessly.
+	if _rock_tex.has(seed_base):
+		return _rock_tex[seed_base]
+	var n := 256
+	var veins := FastNoiseLite.new()
+	veins.seed = seed_base + 45
+	veins.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	veins.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	veins.fractal_octaves = 2
+	veins.frequency = 0.012
+	var plates := FastNoiseLite.new()
+	plates.seed = seed_base + 46
+	plates.frequency = 0.022
+	plates.fractal_octaves = 3
+	var blotch := FastNoiseLite.new()
+	blotch.seed = seed_base + 47
+	blotch.frequency = 0.011
+	blotch.fractal_octaves = 4
+	var crack := veins.get_seamless_image(n, n).get_data()   # L8: brightest along the ridges
+	var tone := plates.get_seamless_image(n, n).get_data()
+	var soft := blotch.get_seamless_image(n, n).get_data()
+	var rgb := PackedByteArray()
+	rgb.resize(n * n * 3)
+	for i in n * n:
+		rgb[i * 3] = int(clampf((float(crack[i]) - 212.0) / 32.0, 0.0, 1.0) * 255.0)
+		# Six shades with soft steps between them, so the rock reads as slabs.
+		var t := float(tone[i]) / 255.0 * 6.0
+		rgb[i * 3 + 1] = int((floor(t) + smoothstep(0.38, 0.62, t - floor(t))) / 6.0 * 255.0)
+		rgb[i * 3 + 2] = soft[i]
+	var img := Image.create_from_data(n, n, false, Image.FORMAT_RGB8, rgb)
+	img.generate_mipmaps()
+	_rock_tex[seed_base] = ImageTexture.create_from_image(img)
+	return _rock_tex[seed_base]
+
+
 static var _rock_mats := {}
 
 
 static func rock_material(foot: float = 0.0) -> ShaderMaterial:
-	## The mountains' rock shader without snow, for boulders and Kevin.
-	## foot = how much the bottom metres blend into the valley floor.
+	## The mountains' rock shader without snow or plants, for boulders and
+	## Kevin. foot = how much the bottom metres blend into the valley floor.
 	if not _rock_mats.has(foot):
+		var level := Levels.current()
 		var m := ShaderMaterial.new()
 		m.shader = load("res://shaders/mountain.gdshader")
-		m.set_shader_parameter("detail_tex", IceField.detail_texture(int(Levels.current().seed)))
+		m.set_shader_parameter("rock_tex", rock_texture(int(level.seed)))
 		m.set_shader_parameter("snow_line", 1000.0)
+		m.set_shader_parameter("tree_line", 0.0)
 		m.set_shader_parameter("foot_amount", foot)
+		Ground.bind(level, m, "rock%s" % foot)
 		_rock_mats[foot] = m
 	return _rock_mats[foot]
 
@@ -171,16 +344,17 @@ static func boulder_mesh(variant: int) -> ArrayMesh:
 	noise.frequency = 1.1
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rings := 7
-	var segs := 10
+	st.set_smooth_group(-1)   # flat faces, like the other models
+	var rings := 5
+	var segs := 8
 	var pts := []
 	for r in rings + 1:
 		var phi := PI * float(r) / rings
 		var row := []
 		for sg in segs:
-			var th := TAU * float(sg) / segs
+			var th := TAU * (float(sg) + 0.5 * (r % 2)) / segs
 			var dir := Vector3(sin(phi) * cos(th), cos(phi), sin(phi) * sin(th))
-			var rad := 0.5 * (1.0 + 0.28 * noise.get_noise_3dv(dir * 1.5))
+			var rad := 0.5 * (1.0 + 0.4 * noise.get_noise_3dv(dir * 1.5))
 			var p := dir * rad * Vector3(1.0, 0.72, 0.9)
 			p.y = maxf(p.y, -0.12)   # sits flat on the ground
 			row.append(p)
@@ -234,11 +408,8 @@ static func forest(spots: Array, shadows: bool) -> Node3D:
 
 
 static func near_stream(level: Dictionary, x: float, z: float, margin: float) -> bool:
-	var pts: Array = level.valley.get("stream", [])
-	for i in pts.size() - 1:
-		if _segment_distance(Vector2(x, z), pts[i], pts[i + 1]) < margin:
-			return true
-	return false
+	## Within `margin` metres of the river's water.
+	return Ground.stream_distance(level, x, z) < margin
 
 
 # =====================================================================================
@@ -274,32 +445,37 @@ static func sky(seed_base: int) -> Sky:
 # Water
 # =====================================================================================
 static func lake(level: Dictionary) -> MeshInstance3D:
-	## A lake with a wobbly shoreline. Vertex alpha = depth (1 in the middle).
+	## A lake with a wobbly shoreline (Ground cuts the same outline out of the
+	## valley floor and slopes the shore down into it). Vertex alpha = depth
+	## (0 at the shore, 1 in the deep middle).
 	var lk: Array = level.valley.lake
-	var noise := FastNoiseLite.new()
-	noise.seed = int(level.seed) + 61
-	noise.frequency = 1.3
-	var segs := 72
-	var rings := 5
+	var segs := 96
 	var verts := PackedVector3Array()
 	var colors := PackedColorArray()
 	var normals := PackedVector3Array()
 	verts.append(Vector3(lk[0], 0.0, lk[1]))
 	colors.append(Color(1, 1, 1, 1))
 	normals.append(Vector3.UP)
-	for r in range(1, rings + 1):
-		var f := float(r) / rings
+	# From the middle out: three rings inside the outline, then the bank.
+	var rings := [[0.3, 1.0], [0.62, 1.0], [0.86, 0.75], [-4.0, 0.3], [Ground.LAKE_BANK, 0.0]]
+	for r in rings.size():
 		for sgm in segs:
 			var a := TAU * float(sgm) / segs
-			var wob := 1.0 + 0.09 * noise.get_noise_2d(cos(a), sin(a)) * f
-			verts.append(Vector3(lk[0] + cos(a) * lk[2] * f * wob * 1.04, 0.0, lk[1] + sin(a) * lk[3] * f * wob * 1.04))
-			colors.append(Color(1, 1, 1, 1.0 - f * f))
+			var p: Vector2
+			if r < 3:
+				var f: float = rings[r][0]
+				var wob := 1.0 + (Ground.lake_wobble(level, a) - 1.0) * f
+				p = Vector2(lk[0] + cos(a) * lk[2] * f * wob, lk[1] + sin(a) * lk[3] * f * wob)
+			else:
+				p = Ground.lake_point(level, a, rings[r][0])
+			verts.append(Vector3(p.x, 0.0, p.y))
+			colors.append(Color(1, 1, 1, rings[r][1]))
 			normals.append(Vector3.UP)
 	var idxs := PackedInt32Array()
 	for sgm in segs:
 		var nx := (sgm + 1) % segs
 		idxs.append_array([0, 1 + sgm, 1 + nx])
-	for r in range(1, rings):
+	for r in range(1, rings.size()):
 		var base0 := 1 + (r - 1) * segs
 		var base1 := 1 + r * segs
 		for sgm in segs:
@@ -316,49 +492,52 @@ static func lake(level: Dictionary) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.name = "Lake"
 	mi.mesh = mesh
-	mi.position.y = 0.06
-	mi.material_override = water_material(1.0)
+	mi.position.y = Ground.LAKE_Y
+	mi.material_override = water_material()
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
 
 
 static func stream(level: Dictionary) -> MeshInstance3D:
-	## Meltwater running from under the glacier's snout down to the lake.
-	var pts: Array = level.valley.get("stream", [])
+	## The river's water: a ribbon along its bed (Ground.stream_path), from
+	## the pool under the waterfall, under the glacier and down to the lake.
+	var sp := Ground.stream_path(level)
+	var pts: PackedVector2Array = sp.pts
 	if pts.size() < 2:
 		return null
-	var curve := Curve2D.new()
-	for i in pts.size():
-		var p: Vector2 = pts[i]
-		var prev: Vector2 = pts[maxi(i - 1, 0)]
-		var nxt: Vector2 = pts[mini(i + 1, pts.size() - 1)]
-		var tangent := (nxt - prev) * 0.25
-		curve.add_point(p, -tangent, tangent)
-	curve.bake_interval = 0.6
-	var baked := curve.get_baked_points()
+	var half: PackedFloat32Array = sp.half
+	var dist: PackedFloat32Array = sp.dist
+	var course: Array = level.valley.stream
+	var pool_at := (course[1] as Vector2).distance_to(course[0])
 	var verts := PackedVector3Array()
 	var colors := PackedColorArray()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
-	var dist := 0.0
-	for i in baked.size():
-		var p := baked[i]
-		if i > 0:
-			dist += p.distance_to(baked[i - 1])
-		var dir := (baked[mini(i + 1, baked.size() - 1)] - baked[maxi(i - 1, 0)]).normalized()
+	for i in pts.size():
+		var dir := (pts[mini(i + 1, pts.size() - 1)] - pts[maxi(i - 1, 0)]).normalized()
 		var side := Vector2(-dir.y, dir.x)
-		var t := float(i) / (baked.size() - 1)
-		var w := lerpf(0.55, 1.1, t) * (1.0 + 0.18 * sin(dist * 0.7))
+		# White water in the pool where the falls land.
+		var churn := exp(-pow((dist[i] - pool_at) / 2.2, 2.0))
+		# It sinks under the lake at the end.
+		var y := -0.12 * smoothstep(float(sp.length) - 4.0, float(sp.length) - 1.0, dist[i])
 		for s in [-1.0, 1.0]:
-			var q: Vector2 = p + side * w * s
-			verts.append(Vector3(q.x, 0.0, q.y))
-			colors.append(Color(1, 1, 1, 0.35))
+			var q: Vector2 = pts[i] + side * (half[i] + 0.35) * s
+			verts.append(Vector3(q.x, y, q.y))
+			colors.append(Color(1.0 - churn, 1, 1, 1))
 			normals.append(Vector3.UP)
-			uvs.append(Vector2(s * 0.5 + 0.5, dist))
+			uvs.append(Vector2(s * 0.5 + 0.5, dist[i]))
 	var idxs := PackedInt32Array()
-	for i in baked.size() - 1:
+	for i in pts.size() - 1:
 		var a := i * 2
 		idxs.append_array([a, a + 3, a + 1, a, a + 2, a + 3])
+	var mi := _ribbon(verts, normals, colors, uvs, idxs, stream_material(0.0))
+	mi.name = "Stream"
+	mi.position.y = Ground.STREAM_Y
+	return mi
+
+
+static func _ribbon(verts: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray,
+		uvs: PackedVector2Array, idxs: PackedInt32Array, mat: Material) -> MeshInstance3D:
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
@@ -369,35 +548,172 @@ static func stream(level: Dictionary) -> MeshInstance3D:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var mi := MeshInstance3D.new()
-	mi.name = "Stream"
 	mi.mesh = mesh
-	mi.position.y = 0.035
-	mi.material_override = water_material(0.0)
+	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
 
 
-static var _water_mats := {}
+static func falls(level: Dictionary) -> Node3D:
+	## Where the river comes from: a waterfall off the snowfield on the back
+	## wall, tumbling down a rocky gully into a pool on the valley floor.
+	## (Call mountains() first: it follows the slope.)
+	var v: Dictionary = level.valley
+	if not v.has("falls_top") or not v.has("stream"):
+		return null
+	var top: Vector2 = v.falls_top
+	var pool: Vector2 = v.stream[1]
+	var root := Node3D.new()
+	root.name = "Falls"
+	var along := (pool - top).normalized()
+	var side := Vector2(-along.y, along.x)
+	var length := top.distance_to(pool)
+	var steps := int(ceil(length / 0.5))
+	var verts := PackedVector3Array()
+	var colors := PackedColorArray()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var run := 0.0
+	var last := Vector3.ZERO
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(level.seed) + 95
+	var foot := Vector3(pool.x, 0.0, pool.y)   # where it lands
+	for i in steps + 1:
+		var t := float(i) / steps
+		var c := top.lerp(pool, t)
+		var w := lerpf(0.5, 1.0, t) * (1.0 + 0.2 * sin(t * 23.0))
+		var mid := Vector3(c.x, maxf(height_at(c.x, c.y) + 0.16, Ground.STREAM_Y + 0.03), c.y)
+		if i > 0:
+			run += mid.distance_to(last)
+		var slope := (mid - last).normalized() if i > 0 else Vector3(along.x, -1.0, along.y).normalized()
+		last = mid
+		var n := Vector3(side.x, 0.0, side.y).cross(slope).normalized()
+		if n.y < 0.0:
+			n = -n
+		for s in [-1.0, 1.0]:
+			var q: Vector2 = c + side * w * s
+			verts.append(Vector3(q.x, maxf(height_at(q.x, q.y) + 0.16, Ground.STREAM_Y + 0.03), q.y))
+			# It seeps out of the snow at the top.
+			colors.append(Color(1, 1, 1, smoothstep(0.0, 0.14, t)))
+			normals.append(n)
+			uvs.append(Vector2(s * 0.5 + 0.5, run))
+		# Rocks along both sides of the gully.
+		if i % 3 == 1 and mid.y > 0.4:
+			for s in [-1.0, 1.0]:
+				if rng.randf() < 0.25:
+					continue
+				var q: Vector2 = c + side * (w + rng.randf_range(0.35, 0.9)) * s + along * rng.randf_range(-0.4, 0.4)
+				_rock(root, Vector3(q.x, height_at(q.x, q.y) - 0.15, q.y), rng.randf_range(0.7, 1.5), rng)
+		if mid.y > 0.2:
+			foot = mid
+	var idxs := PackedInt32Array()
+	for i in steps:
+		var a := i * 2
+		idxs.append_array([a, a + 3, a + 1, a, a + 2, a + 3])
+	var water := _ribbon(verts, normals, colors, uvs, idxs, stream_material(1.0))
+	water.name = "Water"
+	root.add_child(water)
+	# Boulders round the back of the pool.
+	for a in [-2.5, -1.8, -1.1, 1.2, 1.9, 2.6]:
+		var q: Vector2 = pool - along.rotated(a * 0.55) * rng.randf_range(2.3, 2.9)
+		_rock(root, Vector3(q.x, height_at(q.x, q.y) - 0.1, q.y), rng.randf_range(0.8, 1.4), rng)
+
+	# Spray where it lands.
+	var mist := CPUParticles3D.new()
+	mist.name = "Mist"
+	mist.amount = 14
+	mist.lifetime = 2.4
+	mist.preprocess = 2.4
+	mist.position = Vector3(foot.x, 0.25, foot.z) + Vector3(along.x, 0.0, along.y) * 0.5
+	mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	mist.emission_sphere_radius = 0.7
+	mist.direction = Vector3(along.x, 1.6, along.y).normalized()
+	mist.spread = 35.0
+	mist.initial_velocity_min = 0.5
+	mist.initial_velocity_max = 1.1
+	mist.gravity = Vector3(0.0, -0.25, 0.0)
+	mist.scale_amount_min = 1.1
+	mist.scale_amount_max = 2.0
+	var grow := Curve.new()
+	grow.add_point(Vector2(0.0, 0.35))
+	grow.add_point(Vector2(1.0, 1.0))
+	mist.scale_amount_curve = grow
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0.0))
+	fade.add_point(0.2, Color(1, 1, 1, 0.34))
+	fade.set_color(fade.get_point_count() - 1, Color(1, 1, 1, 0.0))
+	mist.color_ramp = fade
+	var dot := GradientTexture2D.new()
+	dot.fill = GradientTexture2D.FILL_RADIAL
+	dot.fill_from = Vector2(0.5, 0.5)
+	dot.fill_to = Vector2(0.5, 0.0)
+	dot.width = 48
+	dot.height = 48
+	var soft := Gradient.new()
+	soft.set_color(0, Color(1, 1, 1, 1))
+	soft.set_color(1, Color(1, 1, 1, 0))
+	dot.gradient = soft
+	var mm := StandardMaterial3D.new()
+	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mm.billboard_keep_scale = true   # or unused particles draw as black discs on WebGL
+	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mm.vertex_color_use_as_albedo = true
+	mm.albedo_texture = dot
+	var quad := QuadMesh.new()
+	quad.material = mm
+	mist.mesh = quad
+	mist.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mist)
+	return root
 
 
-static func water_material(still: float) -> ShaderMaterial:
-	## still = 1 for the lake (gentle ripples), 0 for the stream (flows along its UV).
-	if not _water_mats.has(still):
+static func _rock(parent: Node3D, at: Vector3, size: float, rng: RandomNumberGenerator) -> void:
+	var r := MeshInstance3D.new()
+	r.mesh = boulder_mesh(rng.randi() % 4)
+	r.material_override = rock_material(0.25)
+	r.position = at
+	r.scale = Vector3(size, size * rng.randf_range(0.75, 1.1), size)
+	r.rotation.y = rng.randf() * TAU
+	r.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(r)
+
+
+static var _water_mat: ShaderMaterial
+static var _stream_mats := {}
+static var _ripples: ImageTexture
+
+
+static func _ripple_texture() -> ImageTexture:
+	if _ripples == null:
 		var noise := FastNoiseLite.new()
 		noise.seed = 77
 		noise.frequency = 0.04
 		noise.fractal_octaves = 3
 		var img := noise.get_seamless_image(128, 128)
 		img.generate_mipmaps()
+		_ripples = ImageTexture.create_from_image(img)
+	return _ripples
+
+
+static func water_material() -> ShaderMaterial:
+	## The lake.
+	if _water_mat == null:
+		_water_mat = ShaderMaterial.new()
+		_water_mat.shader = load("res://shaders/water.gdshader")
+		_water_mat.set_shader_parameter("ripples", _ripple_texture())
+	return _water_mat
+
+
+static func stream_material(falling: float) -> ShaderMaterial:
+	## Running water: 0 = the river, 1 = white water down the waterfall.
+	if not _stream_mats.has(falling):
 		var m := ShaderMaterial.new()
-		m.shader = load("res://shaders/water.gdshader")
-		m.set_shader_parameter("ripples", ImageTexture.create_from_image(img))
-		m.set_shader_parameter("still", still)
-		if still < 0.5:   # the stream: milky grey-green meltwater
-			m.set_shader_parameter("shallow_color", Color(0.4, 0.55, 0.56))
-			m.set_shader_parameter("deep_color", Color(0.2, 0.36, 0.42))
-		_water_mats[still] = m
-	return _water_mats[still]
+		m.shader = load("res://shaders/stream.gdshader")
+		m.set_shader_parameter("ripples", _ripple_texture())
+		m.set_shader_parameter("falls", falling)
+		_stream_mats[falling] = m
+	return _stream_mats[falling]
 
 
 static func on_lake(level: Dictionary, x: float, z: float, margin: float = 0.0) -> bool:

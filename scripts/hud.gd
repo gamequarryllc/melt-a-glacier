@@ -24,11 +24,14 @@ var root: Control
 var water_label: Label
 var rate_label: Label
 var ice_label: Label
+var ice_pct: Label
 var ice_bar: ProgressBar
 var target_label: Label
 var tool_label: Label
 var catalogue_button: Button
-var boost_label: Label             # running ad rewards: "🔥 2x 4m 10s"
+var boost_box: VBoxContainer       # running ad rewards, one line each: icon + "2x 4m 10s"
+var _boost_heat: Label
+var _boost_crew: Label
 var offers := AdOffers.new()
 var offer_tag: PanelContainer      # "FREE BONUS: double your water" under the catalogue button
 var respawn_button: Button
@@ -40,12 +43,16 @@ var toast_box: VBoxContainer
 var popups: Control
 var rotate_overlay: Control
 var shop_card: PanelContainer      # what you're looking at in the shed, and its price
+var safe_inset := Rect2()          # notch / home-bar margins in HUD units: position = left, top; size = right, bottom
 
 var _card_title: Label
 var _card_body: Label
 var _card_price: Label
+var _card_price_icon: TextureRect
+var _card_note: Label
 var _card_stamp: PanelContainer
 var _card_footer: Label
+var _stamp_color := Color.BLACK
 var _catalogue: Control
 var _list_box: VBoxContainer
 var _cat_water: Label
@@ -100,6 +107,7 @@ func _ready() -> void:
 	_build_shop_card()
 	touch = TouchControls.new()
 	root.add_child(touch)
+	touch.action_tag = _card_stamp
 	# Tappable with any finger, even while the other thumb is on the stick.
 	touch.buttons = [
 		{"control": respawn_button, "action": _on_respawn_pressed},
@@ -113,12 +121,17 @@ func _ready() -> void:
 	toast_box.offset_right = 400
 	toast_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(toast_box)
 	popups = Control.new()
 	popups.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	popups.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(popups)
+	# Toasts go on top of the catalogue and the popups: "Purchase failed..."
+	# is said while the catalogue is open.
+	root.add_child(toast_box)
 	_build_rotate_overlay()
+	_apply_safe_area()
+	get_viewport().size_changed.connect(_apply_safe_area)
+	get_viewport().size_changed.connect(_place_shop_card)
 	# Phones (the iPhone browser included) start in touch mode, so nothing
 	# says "Press B" or "click" there; a mouse click switches to the PC hints.
 	set_touch_mode(DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
@@ -126,10 +139,20 @@ func _ready() -> void:
 	GameState.discovered_item.connect(_on_discovered)
 	Monetization.purchase_error.connect(_on_purchase_error)
 	Monetization.purchases_changed.connect(_on_purchases_changed)
+	Monetization.restore_done.connect(_on_restore_done)
 
 
 func _on_purchase_error(_id: String, reason: String) -> void:
 	toast("Purchase failed: %s" % reason)
+
+
+func _on_restore_done(found: int, error: String) -> void:
+	if error != "":
+		toast("Couldn't restore: %s" % error)
+	elif found == 0:
+		toast("Nothing to restore on this account")
+	else:
+		toast("Purchases restored")
 
 
 func _on_purchases_changed() -> void:
@@ -142,6 +165,7 @@ func set_coach(text: String) -> void:
 	## Onboarding hint above the crosshair ("" hides it).
 	var show := text != "" and not catalogue_open and popups.get_child_count() == 0
 	coach_label.visible = show
+	text = UiTheme.plain(text)
 	if coach_label.text != text:
 		coach_label.text = text
 
@@ -154,6 +178,7 @@ func set_touch_mode(on: bool) -> void:
 	# version would also fire from the first finger, so it's switched off.
 	for b in touch.buttons:
 		(b.control as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE if on else Control.MOUSE_FILTER_STOP
+	_place_shop_card()
 
 
 func _on_respawn_pressed() -> void:
@@ -186,72 +211,121 @@ func _label(size: int, color: Color = Color.WHITE, outline: int = 6) -> Label:
 
 
 func _build_top() -> void:
+	# Top left: the water plaque, and the way home under it.
+	var corner := VBoxContainer.new()
+	corner.position = Vector2(10, 8)
+	corner.add_theme_constant_override("separation", 6)
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(corner)
 	var left := PanelContainer.new()
 	left.add_theme_stylebox_override("panel", UiTheme.wood_sign())
 	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.position = Vector2(10, 8)
-	root.add_child(left)
+	left.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	corner.add_child(left)
+	var lh := HBoxContainer.new()
+	lh.add_theme_constant_override("separation", 8)
+	lh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_child(lh)
+	lh.add_child(UiTheme.icon_rect("drop", 46))
 	var lv := VBoxContainer.new()
-	lv.add_theme_constant_override("separation", 0)
-	left.add_child(lv)
+	lv.add_theme_constant_override("separation", -4)
+	lv.alignment = BoxContainer.ALIGNMENT_CENTER
+	lv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lh.add_child(lv)
 	water_label = _label(38)
 	UiTheme.outlined(water_label, 38)
+	water_label.custom_minimum_size = Vector2(84, 0)
 	lv.add_child(water_label)
-	rate_label = _label(17, Color(1.0, 0.88, 0.68), 6)
+	rate_label = _label(16, Color(1.0, 0.86, 0.62), 0)
+	rate_label.visible = false
 	lv.add_child(rate_label)
 
 	respawn_button = Button.new()
-	respawn_button.text = "🏠 Stuck? Respawn"
-	respawn_button.position = Vector2(14, 132)
-	respawn_button.custom_minimum_size = Vector2(0, 52)
-	respawn_button.add_theme_font_size_override("font_size", 21)
-	UiTheme.colored_button(respawn_button, Color(0.5, 0.62, 0.72))
+	respawn_button.text = "Respawn"
+	respawn_button.icon = UiTheme.icon("house")
+	respawn_button.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	respawn_button.add_theme_constant_override("icon_max_width", 28)
+	respawn_button.custom_minimum_size = Vector2(0, 50)
+	respawn_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	respawn_button.add_theme_font_size_override("font_size", 20)
+	UiTheme.colored_button(respawn_button, Color(0.47, 0.56, 0.6))
 	respawn_button.pressed.connect(_on_respawn_pressed)
 	respawn_button.set_meta("silent", true)   # (it has its own sound)
-	root.add_child(respawn_button)
+	corner.add_child(respawn_button)
 
+	# Top middle: which glacier, how far along, and the bar.
 	var mid := VBoxContainer.new()
 	mid.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	mid.offset_left = -220
-	mid.offset_right = 220
-	mid.offset_top = 16
+	mid.offset_left = -210
+	mid.offset_right = 210
+	mid.offset_top = 10
+	mid.add_theme_constant_override("separation", -2)
 	mid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(mid)
-	ice_label = _label(21)
-	UiTheme.outlined(ice_label, 21, UiTheme.CREAM, 7)
-	ice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mid.add_child(ice_label)
+	var names := HBoxContainer.new()
+	names.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mid.add_child(names)
+	ice_label = _label(22)
+	UiTheme.outlined(ice_label, 22, UiTheme.CREAM, 7)
+	ice_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	names.add_child(ice_label)
+	ice_pct = _label(22)
+	UiTheme.outlined(ice_pct, 22, Color(0.72, 0.92, 1.0), 7)
+	ice_pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	names.add_child(ice_pct)
 	ice_bar = ProgressBar.new()
 	ice_bar.show_percentage = false
 	ice_bar.max_value = 1.0
-	ice_bar.custom_minimum_size = Vector2(440, 24)
+	ice_bar.custom_minimum_size = Vector2(420, 22)
 	UiTheme.bar_styles(ice_bar, Color(0.62, 0.88, 1.0))
 	ice_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mid.add_child(ice_bar)
 
+	# Top right: the catalogue, with any running bonuses beside it.
 	var right := HBoxContainer.new()
 	right.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	right.offset_left = -360
-	right.offset_right = -16
-	right.offset_top = 14
+	right.offset_left = -420
+	right.offset_right = -14
+	right.offset_top = 10
 	right.alignment = BoxContainer.ALIGNMENT_END
 	right.add_theme_constant_override("separation", 10)
 	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(right)
-	boost_label = _label(20, Color(1.0, 0.8, 0.4))
-	UiTheme.outlined(boost_label, 21, Color(1.0, 0.8, 0.4), 7)
-	boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	boost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	right.add_child(boost_label)
+	boost_box = VBoxContainer.new()
+	boost_box.add_theme_constant_override("separation", -2)
+	boost_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	boost_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.add_child(boost_box)
+	_boost_heat = _boost_line("flame")
+	_boost_crew = _boost_line("penguin")
 	catalogue_button = Button.new()
-	catalogue_button.text = "📖 Catalogue"
-	catalogue_button.custom_minimum_size = Vector2(196, 60)
-	catalogue_button.add_theme_font_size_override("font_size", 25)
-	UiTheme.colored_button(catalogue_button, Color(0.72, 0.3, 0.2))
+	catalogue_button.text = "Catalogue"
+	catalogue_button.icon = UiTheme.icon("book")
+	catalogue_button.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	catalogue_button.add_theme_constant_override("icon_max_width", 34)
+	catalogue_button.custom_minimum_size = Vector2(0, 58)
+	catalogue_button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	catalogue_button.add_theme_font_size_override("font_size", 24)
+	UiTheme.colored_button(catalogue_button, Color(0.7, 0.28, 0.2))
 	catalogue_button.pressed.connect(toggle_catalogue)
 	catalogue_button.set_meta("silent", true)
 	right.add_child(catalogue_button)
 	_build_offer_tag()
+
+
+func _boost_line(icon: String) -> Label:
+	## One running ad reward beside the catalogue button: its icon and time left.
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 4)
+	h.alignment = BoxContainer.ALIGNMENT_END
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.visible = false
+	boost_box.add_child(h)
+	h.add_child(UiTheme.icon_rect(icon, 26))
+	var l := _label(20)
+	UiTheme.outlined(l, 20, Color(1.0, 0.82, 0.42), 7)
+	h.add_child(l)
+	return l
 
 
 func _build_offer_tag() -> void:
@@ -277,11 +351,16 @@ func _build_offer_tag() -> void:
 	v.add_theme_constant_override("separation", 0)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	offer_tag.add_child(v)
+	var oh := HBoxContainer.new()
+	oh.add_theme_constant_override("separation", 6)
+	oh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(oh)
+	oh.add_child(UiTheme.icon_rect("tv", 24))
 	_offer_header = _ink(17, Color(0.75, 0.24, 0.16))
 	_offer_header.add_theme_font_override("font", UiTheme.display_font())
-	_offer_header.text = "📺 FREE BONUS"
-	v.add_child(_offer_header)
-	_offer_title = _ink(25)
+	_offer_header.text = "FREE BONUS"
+	oh.add_child(_offer_header)
+	_offer_title = _ink(23)
 	_offer_title.add_theme_font_override("font", UiTheme.display_font())
 	_offer_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_offer_title.custom_minimum_size = Vector2(282, 0)
@@ -304,7 +383,7 @@ func _build_offer_tag() -> void:
 	UiTheme.bar_styles(_offer_bar, Color(1.0, 0.72, 0.3))
 	h.add_child(_offer_bar)
 	var stamp := PanelContainer.new()
-	stamp.add_theme_stylebox_override("panel", UiTheme.enamel(Color(0.2, 0.52, 0.27)))
+	stamp.add_theme_stylebox_override("panel", UiTheme.tag(Color(0.3, 0.62, 0.34)))
 	stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.add_child(stamp)
 	_offer_stamp = _ink(20, UiTheme.CREAM)
@@ -374,8 +453,79 @@ func _build_bottom() -> void:
 	hint_label.offset_top = 80
 	hint_label.offset_bottom = 140
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_label.text = "Click to play\nWASD move · mouse look · hold left click to melt · Space jump (hold to fly)\nWalk into the 🏠 shed to shop · C catalogue · R respawn · Esc frees the mouse"
+	hint_label.text = "Click to play\nWASD to move, mouse to look, hold left click to melt, Space to jump (hold to fly)\nWalk into the shed to shop.  C catalogue,  R respawn,  Esc frees the mouse"
 	root.add_child(hint_label)
+
+
+static func safe_area_inset(window: Vector2, safe: Rect2, view: Vector2) -> Rect2:
+	## The parts of the screen the notch / Dynamic Island and home bar cover, in
+	## HUD units (left, top as position; right, bottom as size). Empty when the
+	## whole screen is safe or the numbers make no sense.
+	if window.x <= 0.0 or window.y <= 0.0 or safe.size.x <= 0.0 or safe.size.y <= 0.0:
+		return Rect2()
+	var k := Vector2(view.x / window.x, view.y / window.y)
+	var l := maxf(safe.position.x, 0.0) * k.x
+	var t := maxf(safe.position.y, 0.0) * k.y
+	var r := maxf(window.x - safe.end.x, 0.0) * k.x
+	var b := maxf(window.y - safe.end.y, 0.0) * k.y
+	# Keep the HUD centred: the notch side and the far side get the same margin.
+	l = maxf(l, r)
+	r = l
+	return Rect2(l, t, r, b)
+
+
+func _apply_safe_area() -> void:
+	## On iPhones the notch / Dynamic Island and the home bar cover the screen
+	## edges in landscape: keep every button and label inside the safe area,
+	## while the full-screen dims still reach the edges.
+	if not (OS.has_feature("mobile") or OS.has_feature("ios")):
+		return
+	var window := Vector2(DisplayServer.window_get_size())
+	var safe := Rect2(DisplayServer.get_display_safe_area())
+	set_safe_inset(safe_area_inset(window, safe, get_viewport().get_visible_rect().size))
+
+
+func set_safe_inset(inset: Rect2) -> void:
+	## Moves the whole HUD in from the screen's edges (left, top as position;
+	## right, bottom as size).
+	safe_inset = inset
+	root.offset_left = safe_inset.position.x
+	root.offset_top = safe_inset.position.y
+	root.offset_right = -safe_inset.size.x
+	root.offset_bottom = -safe_inset.size.y
+	for c in [popups, rotate_overlay, _catalogue]:
+		if is_instance_valid(c):
+			_fill_screen(c)
+	_place_shop_card()
+
+
+func _place_shop_card() -> void:
+	## The price card sits bottom centre. On a phone it keeps clear of the JUMP
+	## button (so a tap on the card never lands on JUMP) and of the MOVE stick,
+	## sliding left and, on narrow screens, getting a little narrower.
+	var w := get_viewport().get_visible_rect().size.x - safe_inset.position.x - safe_inset.size.x
+	var left := w * 0.5 - 340.0
+	var right := w * 0.5 + 340.0
+	if touch_mode:
+		right = minf(right, w - 315.0 - (TouchControls.JUMP_RADIUS + 25.0) - 14.0)   # JUMP's touch area starts here
+		left = maxf(right - 680.0, 170.0 + TouchControls.STICK_RADIUS + 22.0)       # the stick's hoop ends here
+	shop_card.offset_left = left - w * 0.5
+	shop_card.offset_right = right - w * 0.5
+	_card_body.custom_minimum_size = Vector2(right - left - 40.0, 0)
+
+
+func _fill_screen(c: Control) -> void:
+	## A child of `root` that should still cover the notch strips (dim backdrops).
+	c.offset_left = -safe_inset.position.x
+	c.offset_top = -safe_inset.position.y
+	c.offset_right = safe_inset.size.x
+	c.offset_bottom = safe_inset.size.y
+	if c == _catalogue and c.get_child_count() > 0:
+		var panel := c.get_child(0) as Control
+		panel.offset_left = 70 + safe_inset.position.x
+		panel.offset_right = -70 - safe_inset.size.x
+		panel.offset_top = 26 + safe_inset.position.y
+		panel.offset_bottom = -26 - safe_inset.size.y
 
 
 func _build_rotate_overlay() -> void:
@@ -386,7 +536,8 @@ func _build_rotate_overlay() -> void:
 	rotate_overlay.visible = false
 	root.add_child(rotate_overlay)
 	var l := _label(84)
-	l.text = "📱🔄\n\nTurn your phone sideways\nto play"
+	UiTheme.outlined(l, 64)
+	l.text = "Turn your phone sideways\nto play"
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -428,23 +579,26 @@ func _refresh() -> void:
 	if _find_card != null and is_instance_valid(_find_card) and _find_card.is_inside_tree():
 		top = _find_card.offset_top + _find_card.size.y + 8.0
 	toast_box.offset_top = top
-	water_label.text = "💧 " + Fmt.num(GameState.water)
+	water_label.text = Fmt.num(GameState.water)
 	var rate := GameState.total_helper_power()
-	rate_label.text = "Helpers: %s hp/s" % Fmt.num(rate) if rate > 0.0 else "Melt ice, sell the water"
+	rate_label.visible = rate > 0.0
+	if rate > 0.0:
+		rate_label.text = "crew melts %s/s%s" % [Fmt.num(rate), "  (3x!)" if GameState.is_helper_rush_active() else ""]
 	var left := grid.fraction_left() if grid != null else 1.0
 	ice_bar.value = 1.0 - left
 	if GameState.has_won:
-		ice_label.text = "The lake is free. Summer is back! ☀️"
+		ice_label.text = "Summer is back!"
+		ice_pct.text = ""
 	else:
-		var what: String = str(grid.spec.get("title", "Glacier")) if grid != null else "Glacier"
-		ice_label.text = "%s: %d%% melted  ·  %s m³ of ice left" % [what, int(floor((1.0 - left) * 100.0)), Fmt.num(grid.volume_left())]
+		ice_label.text = str(grid.spec.get("title", "Glacier")) if grid != null else "Glacier"
+		ice_pct.text = "%d%%" % int(floor((1.0 - left) * 100.0))
 	var t: Dictionary = player.target
 	if shop_card.visible:
 		target_label.text = ""
 	elif t.hit:
 		var g: IceField = t.grid
 		var l := g.layer_at(t.pos - t.normal * 0.3)
-		target_label.text = "%s  ·  💧%s per m³" % [g.layer_name(l), Fmt.num(GameState.layer_value(g, l))]
+		target_label.text = "%s   +%s per m³" % [g.layer_name(l), Fmt.num(GameState.layer_value(g, l))]
 		var near: int = find_hint.call(t.pos) if find_hint.is_valid() else -1
 		if near >= 0:
 			target_label.text += "\n" + _tease(near)
@@ -456,21 +610,19 @@ func _refresh() -> void:
 	else:
 		target_label.text = ""
 	var td: Dictionary = GameState.tool_def()
-	tool_label.text = "%s %s" % [td.icon, td.name]
-	var running: Array = []
+	tool_label.text = str(td.name)
+	(_boost_heat.get_parent() as Control).visible = GameState.is_boost_active()
 	if GameState.is_boost_active():
-		running.append("🔥 2x " + Fmt.duration(GameState.boost_seconds_left()))
+		_boost_heat.text = "2x " + Fmt.duration(GameState.boost_seconds_left())
+	(_boost_crew.get_parent() as Control).visible = GameState.is_helper_rush_active()
 	if GameState.is_helper_rush_active():
-		running.append("🐧 3x " + Fmt.duration(GameState.helper_rush_seconds_left()))
-	boost_label.text = "\n".join(running)
-	if GameState.is_helper_rush_active() and rate > 0.0:
-		rate_label.text += "  (3x!)"
+		_boost_crew.text = "3x " + Fmt.duration(GameState.helper_rush_seconds_left())
 	catalogue_button.visible = not catalogue_open and popups.get_child_count() == 0
 	respawn_button.visible = not catalogue_open and popups.get_child_count() == 0
 	hint_label.visible = not touch_mode and not catalogue_open and popups.get_child_count() == 0 \
 		and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
 	if catalogue_open:
-		_cat_water.text = "You have 💧 " + Fmt.num(GameState.water)
+		_cat_water.text = Fmt.num(GameState.water)
 		for r in _row_refreshers:
 			r.call()
 
@@ -484,7 +636,7 @@ func toast(text: String) -> void:
 	p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var l := Label.new()
-	l.text = text
+	l.text = UiTheme.plain(text)
 	l.add_theme_font_size_override("font_size", 22)
 	l.add_theme_color_override("font_color", INK)
 	p.add_child(l)
@@ -508,13 +660,13 @@ static func _tease(d: int) -> String:
 	## how special it is, not what it is).
 	match int(Balance.DISCOVERIES[d].get("rarity", 0)):
 		0, 1:
-			return "❓ Something's frozen in here!"
+			return "Something's frozen in here!"
 		2:
-			return "❓ Something rare is frozen in here!"
+			return "Something rare is frozen in here!"
 		3:
-			return "✨ Something BIG is frozen in here!"
+			return "Something BIG is frozen in here!"
 		_:
-			return "🌟 Something amazing is frozen in here!"
+			return "Something amazing is frozen in here!"
 
 
 func show_find(i: int, value: float) -> void:
@@ -540,17 +692,35 @@ func show_find(i: int, value: float) -> void:
 	card.add_child(v)
 	var tier_text := "%s FIND" % str(rar.name).to_upper()
 	if rarity >= 4:
-		tier_text = "🌟 %s! 🌟" % tier_text
-	elif rarity >= 2:
-		tier_text = "✨ %s ✨" % tier_text
-	var tier := _card_line(tier_text, 20, rar.color)
-	UiTheme.outlined(tier, 20, rar.color, 5)
-	v.add_child(tier)
-	var title := _card_line("%s %s" % [d.icon, d.name], 34, INK)
+		tier_text += "!"
+	var tier_row := HBoxContainer.new()
+	tier_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	tier_row.add_theme_constant_override("separation", 8)
+	tier_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(tier_row)
+	if rarity >= 2:
+		tier_row.add_child(UiTheme.icon_rect("sparkle", 24))
+	var tier := _card_line(tier_text, 20, (rar.color as Color).darkened(0.25))
+	tier.add_theme_font_override("font", UiTheme.display_font())
+	tier_row.add_child(tier)
+	if rarity >= 2:
+		tier_row.add_child(UiTheme.icon_rect("sparkle", 24))
+	var title := _card_line(str(d.name), 34, INK)
 	title.add_theme_font_override("font", UiTheme.display_font())
 	v.add_child(title)
-	var line := _card_line("“%s”   +💧 %s" % [d.flavor, Fmt.num(value)], 19, INK_SOFT)
-	v.add_child(line)
+	var worth := HBoxContainer.new()
+	worth.alignment = BoxContainer.ALIGNMENT_CENTER
+	worth.add_theme_constant_override("separation", 6)
+	worth.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(worth)
+	worth.add_child(_card_line("“%s”" % d.flavor, 19, INK_SOFT))
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(10, 0)
+	worth.add_child(gap)
+	worth.add_child(UiTheme.icon_rect("drop", 22))
+	var plus := _card_line("+" + Fmt.num(value), 22, Color(0.16, 0.42, 0.66))
+	plus.add_theme_font_override("font", UiTheme.display_font())
+	worth.add_child(plus)
 	var next := _card_line(_whats_next(i), 16, BROWN)
 	next.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	next.custom_minimum_size = Vector2(580, 0)
@@ -631,7 +801,7 @@ func _update_offer(delta: float) -> void:
 	offer_tag.visible = playing or offers.watching
 	_offer_t += delta
 	var r: Dictionary = Balance.AD_REWARDS[offers.current]
-	var title := "%s %s" % [r.icon, r.title]
+	var title := str(r.title)
 	if _offer_title.text != title:
 		_offer_title.text = title
 	var pitch := AdOffers.pitch(offers.current)
@@ -717,16 +887,6 @@ func watch_ad(kind: String) -> void:
 # =====================================================================================
 # The shed: a card for whatever you're looking at, and the catalogue
 # =====================================================================================
-func _paper(bg: Color, border: int, radius: int, margin: int) -> StyleBoxFlat:
-	var sb := UiTheme.flat(bg, radius, margin)
-	sb.border_color = BROWN
-	sb.set_border_width_all(border)
-	sb.shadow_color = Color(0, 0, 0, 0.3)
-	sb.shadow_size = 6
-	sb.shadow_offset = Vector2(0, 3)
-	return sb
-
-
 func _ink(size: int, color: Color = INK) -> Label:
 	var l := Label.new()
 	l.add_theme_font_size_override("font_size", size)
@@ -763,14 +923,27 @@ func _build_shop_card() -> void:
 	_card_title.add_theme_font_override("font", UiTheme.display_font())
 	_card_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_card_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_card_title.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	head.add_child(_card_title)
+	_card_note = _ink(20, BROWN)   # "Lv 3/25", or how rare a find is
+	_card_note.add_theme_font_override("font", UiTheme.display_font())
+	_card_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_card_note.size_flags_vertical = Control.SIZE_SHRINK_END
+	head.add_child(_card_note)
+	# The price hangs off the card on a tag. (On phones, tapping it buys.)
 	_card_stamp = PanelContainer.new()
 	_card_stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_card_stamp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(_card_stamp)
+	var ph := HBoxContainer.new()
+	ph.add_theme_constant_override("separation", 5)
+	ph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_stamp.add_child(ph)
+	_card_price_icon = UiTheme.icon_rect("drop", 26)
+	ph.add_child(_card_price_icon)
 	_card_price = _ink(26, Color.WHITE)
 	UiTheme.outlined(_card_price, 26, UiTheme.CREAM, 6)
-	_card_stamp.add_child(_card_price)
+	ph.add_child(_card_price)
 	_card_body = _ink(21, INK_SOFT)
 	_card_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_card_body.custom_minimum_size = Vector2(640, 0)
@@ -799,21 +972,36 @@ func set_shop_info(info: Dictionary) -> void:
 		_card_title.text = title
 	if _card_body.text != body:
 		_card_body.text = body
+	var note: String = info.get("note", "")
+	if _card_note.text != note:
+		_card_note.text = note
 	_card_stamp.visible = price != ""
 	if _card_price.text != price:
 		_card_price.text = price
 	var buying := action in ["BUY", "HIRE", "ADOPT", "UPGRADE", "WAKE UP"]
+	var mark := ""   # the little picture in front of the price
+	if buying:
+		mark = "drop"
+	elif action == "LOCKED":
+		mark = "lock"
+	elif action == "OWNED":
+		mark = "check"
+	_card_price_icon.visible = mark != ""
+	if mark != "":
+		_card_price_icon.texture = UiTheme.icon(mark)
 	var stamp := Color(0.5, 0.47, 0.42)
 	if can:
-		stamp = Color(0.2, 0.52, 0.27)
+		stamp = Color(0.3, 0.62, 0.34)
 	elif buying:
-		stamp = Color(0.66, 0.3, 0.2)
+		stamp = Color(0.7, 0.36, 0.26)
 	elif action == "OWNED" or action == "IN USE" or action == "MAXED":
-		stamp = Color(0.33, 0.5, 0.37)
-	_card_stamp.add_theme_stylebox_override("panel", UiTheme.enamel(stamp))
+		stamp = Color(0.42, 0.56, 0.5)
+	if stamp != _stamp_color:
+		_stamp_color = stamp
+		_card_stamp.add_theme_stylebox_override("panel", UiTheme.tag(stamp))
 	var foot := ""
 	if buying and not can:
-		foot = "Not enough 💧 yet"
+		foot = "Not enough meltwater yet"
 	elif can and not touch_mode:
 		foot = "Click (or press E) to %s" % action.to_lower()
 	_card_footer.visible = foot != ""
@@ -853,45 +1041,54 @@ func open_catalogue() -> void:
 	root.add_child(_catalogue)
 	root.move_child(_catalogue, popups.get_index())   # popups stay on top
 
+	# A book lying open: a leather cover with the paper page on it.
 	var panel := PanelContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.offset_left = 70
 	panel.offset_right = -70
 	panel.offset_top = 26
 	panel.offset_bottom = -26
-	panel.add_theme_stylebox_override("panel", _paper(PAPER, 5, 12, 22))
+	panel.add_theme_stylebox_override("panel", UiTheme.cover())
 	_catalogue.add_child(panel)
+	_fill_screen(_catalogue)
+	var page := PanelContainer.new()
+	page.add_theme_stylebox_override("panel", UiTheme.paper(24.0))
+	panel.add_child(page)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	panel.add_child(v)
+	v.add_theme_constant_override("separation", 4)
+	page.add_child(v)
 
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 16)
+	head.add_theme_constant_override("separation", 14)
 	v.add_child(head)
 	var titles := VBoxContainer.new()
-	titles.add_theme_constant_override("separation", 0)
+	titles.add_theme_constant_override("separation", -4)
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(titles)
-	var title := _ink(38)
-	title.text = "📖 The Catalogue"
+	var title := _ink(40, Color(0.66, 0.22, 0.15))
+	title.add_theme_font_override("font", UiTheme.display_font())
+	title.text = "The Catalogue"
 	titles.add_child(title)
-	var sub := _ink(19, INK_SOFT)
+	var sub := _ink(18, INK_SOFT)
 	sub.text = "Mail-order goods for the serious glacier melter"
 	titles.add_child(sub)
-	_cat_water = _ink(26)
-	_cat_water.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(_cat_water)
+	var purse := HBoxContainer.new()
+	purse.add_theme_constant_override("separation", 6)
+	purse.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(purse)
+	purse.add_child(UiTheme.icon_rect("drop", 32))
+	_cat_water = _ink(30)
+	_cat_water.add_theme_font_override("font", UiTheme.display_font())
+	purse.add_child(_cat_water)
 	var close := Button.new()
 	close.text = "Close"
-	close.custom_minimum_size = Vector2(170, 60)
+	close.custom_minimum_size = Vector2(140, 56)
+	close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	UiTheme.colored_button(close, BROWN)
 	close.pressed.connect(close_catalogue)
 	close.set_meta("silent", true)
 	head.add_child(close)
-	var rule := ColorRect.new()
-	rule.color = BROWN
-	rule.custom_minimum_size = Vector2(0, 3)
-	v.add_child(rule)
+	v.add_child(UiTheme.rule_rect())
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -899,7 +1096,7 @@ func open_catalogue() -> void:
 	v.add_child(scroll)
 	_list_box = VBoxContainer.new()
 	_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list_box.add_theme_constant_override("separation", 8)
+	_list_box.add_theme_constant_override("separation", 2)
 	scroll.add_child(_list_box)
 	_rebuild_catalogue()
 	_refresh()
@@ -936,10 +1133,23 @@ func _rebuild_catalogue() -> void:
 
 
 func _section(text: String) -> void:
-	var l := _ink(22, BROWN)
+	## A heading in the catalogue: the words between two ruled lines.
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 12)
+	h.custom_minimum_size = Vector2(0, 40)
+	_list_box.add_child(h)
+	for side in 2:
+		var line := ColorRect.new()
+		line.color = Color(BROWN, 0.6)
+		line.custom_minimum_size = Vector2(0, 2)
+		line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(line)
+	var l := _ink(20, BROWN)
 	l.add_theme_font_override("font", UiTheme.display_font())
-	l.text = text
-	_list_box.add_child(l)
+	l.text = text.to_upper()
+	h.add_child(l)
+	h.move_child(l, 1)
 
 
 func _row(icon: String, title: String, desc: String) -> ShopRow:
@@ -951,43 +1161,50 @@ func _row(icon: String, title: String, desc: String) -> ShopRow:
 
 func _build_catalogue_rows() -> void:
 	if GameState.has_won:   # after the ending: on to the level menu
-		_section("🗺️ Where to next?")
-		var next := _row("🗺️", "Pick your next glacier", "See what's coming soon, or melt the valley again.")
+		_section("Where to next?")
+		var next := _row("map", "Pick your next glacier", "See what's coming soon, or melt the valley again.")
 		next.set_button("Open", true)
 		next.button.pressed.connect(show_levels)
-	_section("📺 Free, for watching a short ad")
+	_section("Free, for watching a short ad")
 	for k in Balance.AD_REWARDS:
 		_ad_row(k)
-	_section("🛒 Shop")
+	_section("Shop")
 	for id in Monetization.PRODUCTS:
 		var p: Dictionary = Monetization.PRODUCTS[id]
 		var pid: String = id
-		var icon := "🚫" if pid == Monetization.PRODUCT_REMOVE_ADS_2X else "✨"
+		var icon := "noads" if pid == Monetization.PRODUCT_REMOVE_ADS_2X else "dryer"
 		var desc := "No interstitial ads, and everything melts 2x forever." if pid == Monetization.PRODUCT_REMOVE_ADS_2X \
 			else "A gold hair dryer. Purely cosmetic, purely fabulous."
 		var row := _row(icon, p.title, desc)
 		_row_refreshers.append(func():
 			if Monetization.owns(pid):
-				row.set_button("Owned ✔️", false)
+				row.set_button("Owned", false)
 			else:
 				row.set_button(Monetization.price(pid), true))
 		row.button.pressed.connect(func(): Monetization.buy(pid))
 	if GameState.owns_golden_dryer:
-		var g := _row("🎨", "Golden hair dryer", "Show the gold version of the hair dryer.")
+		var g := _row("dryer", "Golden hair dryer", "Show the gold version of the hair dryer.")
 		_row_refreshers.append(func(): g.set_button("On" if GameState.golden_equipped else "Off", true))
 		g.button.pressed.connect(func(): GameState.golden_equipped = not GameState.golden_equipped)
-	var restore := _row("🔄", "Restore purchases", "Re-download what you already bought.")
+	var restore := _row("restore", "Restore purchases", "Re-download what you already bought.")
 	restore.set_button("Restore", true)
 	restore.button.pressed.connect(func():
 		Monetization.restore()
-		toast("Restore requested"))
+		toast("Checking the store..."))
+	if Monetization.privacy_options_required():
+		var privacy := _row("shield", "Ad privacy choices", "Change what you agreed to about ads.")
+		privacy.set_button("Change", true)
+		privacy.button.pressed.connect(Monetization.show_privacy_options)
+	var policy := _row("page", "Privacy policy", "What the game collects (only what ads and the store need).")
+	policy.set_button("Read", true)
+	policy.button.pressed.connect(func(): OS.shell_open(StoreConfig.PRIVACY_POLICY_URL))
 
-	_section("🔊 Sound")
-	_volume_row("🎵", "Music", "Cozy tunes now and then, with quiet stretches between.",
+	_section("Sound")
+	_volume_row("note", "Music", "Cozy tunes now and then, with quiet stretches between.",
 		func(): return Sound.music_volume, Sound.set_music_volume)
-	_volume_row("🔔", "Sound effects", "Tools, ice, footsteps, wind, the shed and your crew.",
+	_volume_row("bell", "Sound effects", "Tools, ice, footsteps, wind, the shed and your crew.",
 		func(): return Sound.sfx_volume, Sound.set_sfx_volume)
-	var mute := _row("🔇", "Mute everything", "On a computer, M does this too.")
+	var mute := _row("mute", "Mute everything", "On a computer, M does this too.")
 	_row_refreshers.append(func(): mute.set_button("Unmute" if Sound.muted else "Mute", true))
 	mute.button.pressed.connect(func():
 		Sound.set_muted(not Sound.muted)
@@ -996,23 +1213,20 @@ func _build_catalogue_rows() -> void:
 	# Dev tools: in the editor, and in exports tagged "playtest" (the web build).
 	# Remove the tag from export_presets.cfg before shipping.
 	if OS.is_debug_build() or OS.has_feature("playtest"):
-		var title := _ink(22, Color(0.7, 0.2, 0.15))
-		title.text = "Developer tools (playtest builds only)"
-		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_list_box.add_child(title)
-		var cash := _row("💰", "Free meltwater", "Adds 10x your current water (at least 1K).")
+		_section("Developer tools (playtest builds only)")
+		var cash := _row("drop", "Free meltwater", "Adds 10x your current water (at least 1K).")
 		cash.set_button("Add", true)
 		cash.button.pressed.connect(func(): GameState.grant_water(maxf(1000.0, GameState.water * 10.0), false))
-		var speed := _row("⏩", "Melting speed", "Multiplies all melting, for testing.")
+		var speed := _row("flame", "Melting speed", "Multiplies all melting, for testing.")
 		_row_refreshers.append(func(): speed.set_button("x%d" % int(GameState.debug_speed), true))
 		speed.button.pressed.connect(func():
 			GameState.debug_speed = 1.0 if GameState.debug_speed >= 100.0 else GameState.debug_speed * 10.0)
-		var melt := _row("☀️", "Melt this glacier", "Skip to the next glacier (or the ending).")
+		var melt := _row("cube", "Melt this glacier", "Skip to the next glacier (or the ending).")
 		melt.set_button("Melt", true)
 		melt.button.pressed.connect(func():
 			close_catalogue()
 			GameState.grid.melt_everything())
-		var wipe := _row("🗑️", "Start over", "New glacier, keeps purchases.")
+		var wipe := _row("restore", "Start over", "New glacier, keeps purchases.")
 		wipe.set_button("Wipe", true)
 		wipe.button.pressed.connect(func():
 			GameState.wipe_save()
@@ -1041,6 +1255,7 @@ func _volume_row(icon: String, title: String, desc: String, get_v: Callable, set
 	h.add_child(quieter)
 	h.move_child(quieter, gauge.get_index())
 	row.button.custom_minimum_size = Vector2(76, 76)
+	UiTheme.colored_button(row.button, Color(0.38, 0.7, 0.4))   # a board like "-", not a price tag
 	var step := func(d: float):
 		set_v.call(snappedf(clampf(float(get_v.call()) + d, 0.0, 1.0), 0.1))
 		_refresh_rows()
@@ -1063,7 +1278,7 @@ func _ad_row(kind: String) -> void:
 	## One free bonus in the catalogue. Whatever the tag is offering right now
 	## is marked as today's special; double water only comes as a special.
 	var r: Dictionary = Balance.AD_REWARDS[kind]
-	var row := _row(str(r.icon), str(r.title), "")
+	var row := _row({"double_water": "drop", "heat_rush": "flame", "helper_rush": "penguin"}.get(kind, "sparkle"), str(r.title), "")
 	row.button.pressed.connect(func(): watch_ad(kind))
 	_row_refreshers.append(func():
 		var special := offers.current == kind
@@ -1106,6 +1321,8 @@ func _ad_row(kind: String) -> void:
 # Popups
 # =====================================================================================
 func _popup(title: String, body: String) -> Dictionary:
+	if _find_card != null and is_instance_valid(_find_card):
+		_find_card.queue_free()   # (it would peek out from behind the popup)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.input_enabled = false
 	touch.release_all()
@@ -1123,15 +1340,16 @@ func _popup(title: String, body: String) -> Dictionary:
 	panel.add_theme_stylebox_override("panel", UiTheme.paper(34.0))
 	center.add_child(panel)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 14)
+	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)
 	var t := Label.new()
-	t.text = title
+	t.text = UiTheme.plain(title)
 	t.add_theme_font_override("font", UiTheme.display_font())
-	t.add_theme_font_size_override("font_size", 44)
-	t.add_theme_color_override("font_color", Color(0.75, 0.24, 0.16))
+	t.add_theme_font_size_override("font_size", 46)
+	t.add_theme_color_override("font_color", Color(0.72, 0.23, 0.15))
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
+	v.add_child(UiTheme.rule_rect(24.0))
 	var b := Label.new()
 	b.text = body
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1169,7 +1387,7 @@ func show_stage_done(stage: int) -> void:
 		close_catalogue()
 	var next: String = str(GameState.grids[stage].spec.get("name", "the next glacier")) if stage < GameState.grids.size() else "the next glacier"
 	var body := "Everyone's home again, and your helpers have earned a holiday: they're partying in the village square.\n\nBut look past the fence. The whole lake froze solid, and the gate is open now.\nHire a new crew at the shed and go melt %s!" % next
-	var p := _popup("🏘️ The village is free! 🎉", body)
+	var p := _popup("The village is free!", body)
 	_popup_button(p, "To the lake!", Color(0.25, 0.5, 0.85), func(): _close_popup(p))
 
 
@@ -1183,10 +1401,33 @@ func show_ending() -> void:
 	for d in GameState.discovered:
 		if d:
 			found += 1
-	var body := "The last chunk dripped away and the lake is free.\nSummer is back!\n\n⏱ %s played\n🧊 %s m³ of ice melted\n💧 %s meltwater earned\n🏺 %d/%d finds\n\n(Screenshot this!)" % [
-		Fmt.duration(GameState.play_time), Fmt.num(GameState.melted_cubic_metres()), Fmt.num(GameState.lifetime_water),
-		found, Balance.DISCOVERIES.size()]
-	var p := _popup("☀️ THE END ☀️", body)
+	var p := _popup("The End", "The last chunk dripped away and the lake is free.\nSummer is back!")
+	# The run in numbers, like a score sheet.
+	var sheet := GridContainer.new()
+	sheet.columns = 3
+	sheet.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	sheet.add_theme_constant_override("h_separation", 12)
+	sheet.add_theme_constant_override("v_separation", 2)
+	p.box.add_child(sheet)
+	for row in [
+			["clock", "Time played", Fmt.duration(GameState.play_time)],
+			["cube", "Ice melted", "%s m³" % Fmt.num(GameState.melted_cubic_metres())],
+			["drop", "Meltwater earned", Fmt.num(GameState.lifetime_water)],
+			["vase", "Finds dug up", "%d of %d" % [found, Balance.DISCOVERIES.size()]]]:
+		sheet.add_child(UiTheme.icon_rect(row[0], 30))
+		var what := _ink(22, INK_SOFT)
+		what.text = row[1]
+		what.custom_minimum_size = Vector2(230, 0)
+		sheet.add_child(what)
+		var n := _ink(26)
+		n.add_theme_font_override("font", UiTheme.display_font())
+		n.text = row[2]
+		n.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		sheet.add_child(n)
+	var tip := _ink(17, BROWN)
+	tip.text = "(Screenshot this!)"
+	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.box.add_child(tip)
 	_popup_button(p, "Walk around the village", Color(0.36, 0.6, 0.86), func(): _close_popup(p))
 	_popup_button(p, "Melt a new glacier", Color(0.95, 0.55, 0.2), func():
 		_close_popup(p)
@@ -1205,4 +1446,9 @@ func show_levels() -> void:
 	touch.visible = false
 	var menu := LevelMenu.new()
 	popups.add_child(menu)
+	var page := menu.get_child(0) as Control   # keep the page clear of the notch and home bar
+	page.offset_left += safe_inset.position.x
+	page.offset_top += safe_inset.position.y
+	page.offset_right -= safe_inset.size.x
+	page.offset_bottom -= safe_inset.size.y
 	menu.closed.connect(func(): _close_popup({"root": menu}))

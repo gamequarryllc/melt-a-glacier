@@ -1,6 +1,6 @@
 # A Game About Melting A Glacier (prototype)
 
-A first-person, landscape incremental game made in **Godot 4.4**. You walk around
+A first-person, landscape incremental game made in **Godot 4.7**. You walk around
 a valley that's buried under a glacier, aim a hair dryer at the ice and slowly
 dig into it. Meltwater is money: spend it at the shed on hotter tools,
 upgrades and helpers (penguins with tiny torches, a sauna crew, an adopted
@@ -13,7 +13,7 @@ lake ice is gone summer comes back. A run takes roughly 35 to 70 minutes.
 
 ## Play it on your phone (iPhone or Android)
 
-**https://alexanderjcurry.github.io/melt-a-glacier/**
+**https://gamequarryllc.github.io/melt-a-glacier/**
 
 Open the link in Safari (or Chrome on Android) and turn the phone sideways.
 For a full-screen, app-like version on iPhone, tap **Share > Add to Home Screen**
@@ -41,7 +41,7 @@ only work in the native app builds.
 
 ## Run it on Windows (5 minutes)
 
-1. Download **Godot 4.4.x (Standard, not .NET)** from https://godotengine.org/download/windows/ and unzip it. There's no installer.
+1. Download **Godot 4.7.2 (Standard, not .NET)** from https://godotengine.org/download/windows/ and unzip it. There's no installer.
 2. Open Godot, click **Import**, and pick `project.godot` in this folder.
 3. Press **F5** (or the ▶ button). Click in the window to grab the mouse.
 
@@ -58,11 +58,10 @@ Fastest path, no APK needed:
 1. On the phone, enable **Developer options**, then turn on **USB debugging**.
 2. In Godot, open **Editor > Manage Export Templates** and click **Download and Install**.
 3. Install **JDK 17** and the **Android SDK** (the easiest way is to install Android Studio once). Then set their paths in **Editor > Editor Settings > Export > Android**.
-4. Plug the phone in. An Android icon appears at the top right of Godot. Click it to install and run the game on the phone.
+4. In Godot, run **Project > Install Android Build Template** once (the ads and store plugins need the Gradle build).
+5. Plug the phone in. An Android icon appears at the top right of Godot. Click it to install and run the game on the phone.
 
-To make an APK you can share, use **Project > Export > Android > Export Project**. A preset is already included. Change `package/unique_name` from `com.example.meltaglacier` to your own (for example `com.yourname.meltaglacier`) before you ever upload to Google Play, because you can't change it later.
-
-iOS comes later through Codemagic (Godot workflow). Nothing in the code is Android-only.
+Store builds (Android App Bundle, and the iPhone build on Codemagic) are made by CI: see [docs/LAUNCH.md](docs/LAUNCH.md).
 
 ## What's in the prototype
 
@@ -72,8 +71,8 @@ iOS comes later through Codemagic (Godot workflow). Nothing in the code is Andro
 | The level: each glacier's shape, its crevasses and the valley around them are one dictionary, so more levels (or more glaciers in one level) are more dictionaries | `scripts/levels.gd` |
 | A fence across the valley keeps you off the lake. Its gate is locked until the village is free, then swings open. Your helpers retire and party in the village, and you hire a new crew for the lake at the same prices. Tools and upgrades carry over | `World._build_fence()`, `GameState.check_win()` |
 | First-person walking (CharacterBody3D on the ice's collision mesh), step-up, a jetpack (hold JUMP, fuel refills on landing) and a respawn button | `scripts/player.gd` |
-| The valley: generated mountains with rock and snow, a cloudy sky, the lake and a meltwater stream, pine forest, boulders | `scripts/scenery.gd`, `shaders/` |
-| The heat tool: aim with the crosshair, hold to melt a ball of ice. Each tool has its own 3D effect: rings of hot air in a warm haze, a cone of lamp light with dust glinting in it, a blue torch flame and jet, billowing fire with embers, a molten lava stream that drips and splashes, and a column of sunlight from space with shockwaves. Where it lands the ice steams, sparks or flurries. Upgrades show in it: Wider Nozzle makes it wider where it lands, Longer Reach makes it go further, Heat Output makes it brighter and denser | `Player._update_tool()`, `scripts/tool_fx.gd`, `shaders/tool_cone.gdshader`, `shaders/spark.gdshader` |
+| The valley: generated mountains (cut rock, a grassy apron, pine woods up to the tree line, snow), a cloudy sky, the lake with a sandy shore, pine forest, boulders. The valley floor is bare moraine that grows over with grass in patches as the glacier melts, with tufts of grass, pebbles and trodden paths. A river starts at a waterfall on the back wall, runs under the glacier and through the village, comes out of an ice cave at the snout and goes down to the lake | `scripts/scenery.gd`, `scripts/ground.gd`, `shaders/` |
+| The heat tool: aim with the crosshair, hold to melt a ball of ice. Each tool has its own 3D effect, drawn like a cartoon (flat colours, hard edges, brush strokes): gusts of hot air curling out of the hair dryer, rays of lamp light with dust glinting in them, a blue torch flame and jet, billowing fire with embers, a rope of lava that arcs, drips and splashes, and a column of sunlight from space with a crown of fire. Where it lands the ice steams, sparks or flurries. Upgrades show in it: Wider Nozzle makes it wider where it lands, Longer Reach makes it go further, Heat Output makes it brighter and denser | `Player._update_tool()`, `scripts/tool_fx.gd`, `shaders/toon_puff.gdshaderinc`, `shaders/wind_lines.gdshader`, `shaders/toon_flame.gdshader`, `shaders/lava_stream.gdshader`, `tests/spray_shots.gd` |
 | The shed is a walk-in store: tools hang on the pegboard, upgrades sit on the workbench, helpers wait in the hiring corner, finds go on the shelf by the door, and the catalogue on the table has the boost and purchases. Look at anything for a paper price card, then buy it where it stands | `scripts/shed.gd`, `Hud.set_shop_info()` |
 | 6 tools bought in order at the shed: Hair Dryer, Heat Lamp, Blowtorch, Flamethrower, Lava Hose, Orbital Mirror (the same models you hold) | `Balance.TOOLS`, `scripts/props.gd` |
 | 5 upgrades: Heat Output, Wider Nozzle, Longer Reach, Steam Sell, Crampon Boots | `Balance.UPGRADES` |
@@ -102,11 +101,12 @@ export_presets.cfg       Web (playtest) and Android export presets
 scenes/world.tscn        the only scene; everything is built in code
 scripts/balance.gd       ALL tunable numbers: layers, tools, upgrades, helpers, finds, ad rules
 scripts/game_state.gd    autoload: economy, shed purchases, save/load
-scripts/levels.gd        level descriptions: glacier shape, crevasses, valley, stream
+scripts/levels.gd        level descriptions: glacier shape, crevasses and ice caves, valley, river, paths
 scripts/world.gd         builds the valley (village, finds) and wires everything up
 scripts/shed.gd          the walk-in shed: building, sections, what you look at and buy
 scripts/props.gd         models of the six tools and the upgrade items
-scripts/scenery.gd       mountains, sky, lake, stream, forest, boulders
+scripts/scenery.gd       mountains, sky, lake, river and waterfall, forest, boulders
+scripts/ground.gd        the valley floor: river bed, lake shore, grass, tufts, pebbles
 scripts/ice_field.gd     the glacier: density field, meshing, melting, collision, save string
 scripts/player.gd        first-person movement, jetpack, respawn, the heat tool
 scripts/tool_fx.gd       what comes out of each tool (flames, beams, sparks, steam), sized by your upgrades
@@ -124,7 +124,7 @@ scripts/audio/sound.gd   autoload "Sound": every sound effect, the music and the
 audio/                   the sounds (sfx/), wind and birds (amb/) and the music (music/), built by art/audio/
 default_bus_layout.tres  audio buses: Music, Ambience, SFX
 scripts/monetization/    ad + IAP interface, stub provider, autoload facade
-shaders/                 ice, mountain rock and snow, sky, water, shed wood, the tools' flames and sparks
+shaders/                 ice, mountain rock and snow, the valley floor, grass, sky, lake and river water, shed wood, the tools' flames and sparks
 fonts/                   subset Noto Color Emoji (the placeholder art) + license
 tests/smoke_test.gd      headless test: godot --headless -s res://tests/smoke_test.gd
 tests/screenshots.gd     renders screenshots of key moments (see the top of the file)
@@ -154,17 +154,11 @@ between. Each tool costs roughly what the glacier pays out while you use the
 tool before it, so to slow a part down, raise the next tool's cost or the hp of
 the layers it has to get through.
 
-## Adding real ads and purchases later
+## Ads, purchases and publishing
 
-The game only ever calls the `Monetization` autoload. That autoload forwards to one `MonetizationProvider`. Right now that provider is `StubMonetizationProvider`, which shows a fake 3-second "ad" and approves every purchase, so you can test the whole flow.
+Real ads (AdMob, with the EU consent form and the iPhone tracking prompt) and real purchases (RevenueCat) are wired in. On a phone the game uses them; in the editor and the web playtest it uses the stub with pretend ads and free purchases. Every id lives in `scripts/monetization/store_config.gd`.
 
-To go live:
-1. Install the plugins. For ads, use the **Poing Studios Godot AdMob plugin**. For purchases, use the official **GodotGooglePlayBilling** plugin (Android) and an iOS StoreKit plugin later. If you want one purchase API across both stores, RevenueCat has a Godot community plugin too.
-2. Create `scripts/monetization/admob_billing_provider.gd` that `extends MonetizationProvider`. Implement `initialize`, `show_rewarded`, `show_interstitial`, `purchase`, `restore_purchases` and `price_string`, and emit the matching signals.
-3. Return your new provider from `_create_provider()` in `scripts/monetization/monetization.gd`.
-4. Create the same IDs in the store consoles: products `remove_ads_2x` and `golden_hair_dryer` (both non-consumable), and the rewarded placements `boost_2x_heat`, `double_water` and `helper_rush` (`Monetization.PLACEMENT_*`).
-
-No game code changes beyond that.
+How to publish, step by step, including what only the account owner can do: **[docs/LAUNCH.md](docs/LAUNCH.md)**.
 
 ## Placeholder art
 

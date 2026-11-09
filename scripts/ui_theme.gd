@@ -1,10 +1,12 @@
 class_name UiTheme
 extends RefCounted
 ## Shared look for every menu: fonts (with emoji), colours, and the
-## hand-drawn pieces the HUD is made of (art/ui/make_ui.py draws them): a
-## wooden sign, a sheet of paper, enamel buttons tinted to any colour, and a
-## progress bar in a wooden slot. Titles and buttons use Lilita One, a chunky
-## sign-painter style face; everything else is Nunito ExtraBold.
+## hand-painted pieces the HUD is made of (art/ui/make_ui.py draws them): a
+## stained wooden plaque, a sheet of paper, painted boards for buttons (tinted
+## to any colour), hanging price tags, a progress bar in a carved slot, and a
+## set of inked icons (icon()) used instead of emoji. Titles and buttons use
+## Lilita One, a chunky sign-painter style face; everything else is Nunito
+## ExtraBold.
 
 const EMOJI_FONT_PATH := "res://fonts/NotoColorEmoji-subset.ttf"
 const DISPLAY_FONT_PATH := "res://fonts/LilitaOne-Regular.ttf"
@@ -66,12 +68,85 @@ static func _nine(name: String, margin: float, content: Vector4, tint: Color = C
 	return sb
 
 
+static func icon(name: String) -> Texture2D:
+	## One of the inked HUD icons in ui/icon/ ("drop", "flame", "book", ...).
+	return tex("icon/" + name)
+
+
+static func has_icon(name: String) -> bool:
+	return name != "" and name.is_valid_identifier() and ResourceLoader.exists("res://ui/icon/%s.png" % name)
+
+
+static func icon_rect(name: String, px: float) -> TextureRect:
+	## An icon as a square control, `px` on a side.
+	var r := TextureRect.new()
+	r.texture = icon(name)
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.custom_minimum_size = Vector2(px, px)
+	r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # drawn at 96 px, shown much smaller
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return r
+
+
 static func wood_sign() -> StyleBoxTexture:
-	return _nine("wood_sign", 26.0, Vector4(26, 14, 26, 18))
+	return _nine("wood_sign", 26.0, Vector4(20, 12, 24, 16))
+
+
+static func tag(color: Color) -> StyleBoxTexture:
+	## A hanging price tag (pointed end and string hole on the left), tinted.
+	var sb := StyleBoxTexture.new()
+	sb.texture = tex("tag")
+	sb.texture_margin_left = 30.0
+	sb.texture_margin_right = 14.0
+	sb.texture_margin_top = 14.0
+	sb.texture_margin_bottom = 18.0
+	sb.content_margin_left = 34.0
+	sb.content_margin_right = 16.0
+	sb.content_margin_top = 7.0
+	sb.content_margin_bottom = 13.0
+	sb.modulate_color = color
+	return sb
 
 
 static func paper(pad: float = 26.0) -> StyleBoxTexture:
 	return _nine("paper", 28.0, Vector4(pad, pad, pad, pad + 4.0))
+
+
+static func cover() -> StyleBoxFlat:
+	## The leather cover a big paper page sits on (the catalogue, the level menu).
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.43, 0.18, 0.13)
+	sb.border_color = INK
+	sb.set_border_width_all(4)
+	sb.set_corner_radius_all(7)
+	sb.set_content_margin_all(4)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = 0
+	sb.shadow_offset = Vector2(0, 6)
+	return sb
+
+
+static func rule_rect(height: float = 22.0) -> TextureRect:
+	## A hand-inked divider: a wavy line with a red diamond in the middle.
+	var r := TextureRect.new()
+	r.texture = tex("rule")
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.custom_minimum_size = Vector2(0, height)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return r
+
+
+static func tag_button(b: Button, color: Color) -> void:
+	## A button that is a price tag (the catalogue's rows).
+	no_keyboard(b)
+	b.add_theme_stylebox_override("normal", tag(color))
+	b.add_theme_stylebox_override("hover", tag(color.lightened(0.12)))
+	b.add_theme_stylebox_override("pressed", tag(color.darkened(0.14)))
+	b.add_theme_stylebox_override("disabled", tag(Color(0.74, 0.69, 0.6)))
+	b.add_theme_color_override("font_disabled_color", Color(0.98, 0.95, 0.88))
 
 
 static func bar_styles(bar: ProgressBar, fill: Color) -> void:
@@ -85,19 +160,45 @@ static func bar_styles(bar: ProgressBar, fill: Color) -> void:
 
 
 static func enamel(color: Color, pressed: bool = false) -> StyleBoxTexture:
-	## A chunky painted button with an ink outline, tinted `color`.
-	return _nine("button_down" if pressed else "button", 22.0,
-			Vector4(20, 14 if not pressed else 18, 20, 18 if not pressed else 14), color)
+	## A painted board with cut corners and an ink outline, tinted `color`.
+	## (Still called enamel from the old glossy look.)
+	return _nine("button_down" if pressed else "button", 20.0,
+			Vector4(18, 9 if not pressed else 13, 18, 17 if not pressed else 13), color)
 
 
 static func outlined(c: Control, size: int, color: Color = CREAM, outline: int = 8, display: bool = true) -> void:
-	## Lettering in the display font, with a dark ink outline.
+	## Sign-painter lettering in the display font: a thin ink outline and a
+	## hard drop shadow under it, so it reads over snow and sky alike.
 	if display:
 		c.add_theme_font_override("font", display_font())
 	c.add_theme_font_size_override("font_size", size)
 	c.add_theme_color_override("font_color", color)
 	c.add_theme_color_override("font_outline_color", INK)
-	c.add_theme_constant_override("outline_size", outline)
+	var o := maxi(4, int(outline * 0.6))
+	c.add_theme_constant_override("outline_size", o)
+	if c is Label:
+		c.add_theme_color_override("font_shadow_color", INK)
+		c.add_theme_constant_override("shadow_outline_size", o)
+		c.add_theme_constant_override("shadow_offset_x", 0)
+		c.add_theme_constant_override("shadow_offset_y", maxi(2, size / 10))
+
+
+static func plain(text: String) -> String:
+	## `text` without emoji (the HUD draws its own icons): toasts and hints
+	## written with a leading emoji come out as plain words.
+	var out := ""
+	for i in text.length():
+		var c := text.unicode_at(i)
+		if c == 0x200D or (c >= 0xFE00 and c <= 0xFE0F) or c >= 0x1F000 or (c >= 0x2600 and c <= 0x27BF) \
+				or (c >= 0x2300 and c <= 0x23FF) or (c >= 0x2B00 and c <= 0x2BFF):
+			continue
+		out += text[i]
+	while out.contains("  "):
+		out = out.replace("  ", " ")
+	var lines := out.split("\n")
+	for k in lines.size():
+		lines[k] = lines[k].strip_edges()
+	return "\n".join(lines)
 
 
 static func soft_dot() -> Texture2D:
@@ -140,7 +241,8 @@ static func make_theme() -> Theme:
 	t.set_color("font_pressed_color", "Button", CREAM)
 	t.set_color("font_disabled_color", "Button", Color(0.85, 0.82, 0.76))
 	t.set_color("font_outline_color", "Button", INK)
-	t.set_constant("outline_size", "Button", 7)
+	t.set_constant("outline_size", "Button", 5)
+	t.set_constant("h_separation", "Button", 8)
 	var blue := Color(0.36, 0.6, 0.86)
 	t.set_stylebox("normal", "Button", enamel(blue))
 	t.set_stylebox("hover", "Button", enamel(blue.lightened(0.12)))

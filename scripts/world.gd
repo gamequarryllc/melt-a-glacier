@@ -42,10 +42,7 @@ var shed: Shed
 var solids: Array[AABB] = []
 var fleet: PirateFleet         # the goblin pirate ships frozen in the lake
 
-var _ground_mat: StandardMaterial3D
 var _mountains: MeshInstance3D
-var _grass := Color(0.42, 0.57, 0.3)
-var _moraine := Color(0.55, 0.46, 0.34)
 var _mats := {}
 var _find_markers := {}        # discovery index -> Node3D (see _make_find_marker)
 var _find_spots := {}          # discovery index -> where it's frozen (worked out on the fresh ice)
@@ -96,6 +93,7 @@ func _ready() -> void:
 	_build_fleet()
 
 	_build_fence()
+	_build_scatter()
 
 	# The glaciers. Each find's spot is worked out on the fresh ice (so it's the
 	# same every game), then the save is loaded on top.
@@ -168,7 +166,7 @@ func _ready() -> void:
 		hud.toast("⚓ There's a ship frozen in here!"))
 	fleet.ship_freed.connect(func(n: String, bounty: float):
 		Sound.jingle("pirate_sting", -3.0, 2.5)
-		hud.toast("☠️ %s is free! The goblins pay you 💧 %s" % [n, Fmt.num(bounty)]))
+		hud.toast("☠️ %s is free! The goblins pay you %s meltwater" % [n, Fmt.num(bounty)]))
 	Sound.indoors = false
 
 	get_window().size_changed.connect(_fit_render_scale)
@@ -803,9 +801,7 @@ func _update_floats(delta: float) -> void:
 # =====================================================================================
 func _update_slow() -> void:
 	var melted := 1.0 - grid.fraction_left()
-	_ground_mat.albedo_color = _moraine.lerp(_grass, clampf(pow(melted, 0.6), 0.0, 1.0))
-	if _mountains != null:
-		(_mountains.material_override as ShaderMaterial).set_shader_parameter("foot_color", _ground_mat.albedo_color)
+	Ground.set_green(clampf(pow(melted, 0.6), 0.0, 1.0))
 	for f in _flowers:
 		var node: Node3D = f.node
 		if node.visible:
@@ -837,16 +833,16 @@ func _update_coach() -> void:
 				GameState.tutorial_step = 1
 				_coach_timer = 0.0
 			elif hud.touch_mode:
-				text = "Walk up to the ice with the left stick,\naim at it and hold 🔥 to melt it"
+				text = "Walk up to the ice with the left stick,\naim at it and hold MELT"
 			else:
 				text = "Walk up to the ice (WASD), aim at it\nand hold the left mouse button to melt it"
 		1:
-			text = "Melted ice turns into 💧 meltwater.\nDeeper ice is harder, but worth more"
+			text = "Melted ice turns into meltwater.\nDeeper ice is harder, but worth more"
 			if _coach_timer > 7.0:
 				GameState.tutorial_step = 2
 		2:
 			if GameState.water >= 20.0:
-				text = "Spend your 💧 at the 🏠 shed:\nwalk in, hotter tools melt way faster"
+				text = "Spend your meltwater at the shed:\nwalk in, hotter tools melt way faster"
 	hud.set_coach(text)
 
 
@@ -910,7 +906,7 @@ func _build_fence() -> void:
 	var x := -half
 	while x <= half + 0.01:
 		if absf(x) > gap + 0.3:
-			_box(Vector3(0.16, 1.35, 0.16), Vector3(x, 0.675, z), dark)
+			_box(Vector3(0.16, 1.85, 0.16), Vector3(x, 0.425, z), dark)   # sunk in: one stands in the river
 		x += 2.5
 	for side in [-1.0, 1.0]:
 		var x0: float = side * (gap + 0.15)
@@ -1104,31 +1100,10 @@ func _build_environment() -> void:
 
 
 func _build_ground() -> void:
-	# A soft noise texture so the ground isn't one flat colour.
-	var noise := FastNoiseLite.new()
-	noise.seed = Balance.WORLD_SEED + 5
-	noise.frequency = 0.05
-	var img := noise.get_seamless_image(128, 128)
-	img.convert(Image.FORMAT_RGB8)
-	for y in img.get_height():
-		for x in img.get_width():
-			var v := 0.7 + 0.3 * img.get_pixel(x, y).r
-			img.set_pixel(x, y, Color(v, v, v))
-	img.generate_mipmaps()
-	_ground_mat = StandardMaterial3D.new()
-	_ground_mat.albedo_texture = ImageTexture.create_from_image(img)
-	_ground_mat.uv1_scale = Vector3(50, 50, 1)
-	_ground_mat.roughness = 1.0
-	_ground_mat.albedo_color = _moraine
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(500, 500)
-	var ground := MeshInstance3D.new()
-	ground.mesh = pm
-	ground.material_override = _ground_mat
-	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(ground)
+	# The valley floor, with the river's course and the lake cut into it.
+	add_child(Ground.floor_node(level))
 
-	# The meltwater lake past the glacier's tongue, and the stream that feeds it.
+	# The meltwater lake past the glacier's tongue, and the river that feeds it.
 	_lake_water = Scenery.lake(level)
 	_water_mat = _lake_water.material_override
 	add_child(_lake_water)
@@ -1157,8 +1132,26 @@ func _build_ground() -> void:
 func _build_mountains() -> void:
 	# One heightfield all the way round, with a hollow for Kevin the volcano.
 	var kevin := Vector2(HelperSwarm.VOLCANO_POS.x, HelperSwarm.VOLCANO_POS.z)
-	_mountains = Scenery.mountains(level, kevin, IceField.detail_texture(int(level.seed)))
+	_mountains = Scenery.mountains(level, kevin)
 	add_child(_mountains)
+	add_child(Scenery.slope_forest(level, 320))
+	# The waterfall the river starts from, down the back wall.
+	var falls := Scenery.falls(level)
+	if falls != null:
+		add_child(falls)
+
+
+func _build_scatter() -> void:
+	# Tufts of grass and loose stones, clear of the buildings.
+	var free := func(x: float, z: float) -> bool:
+		if shed.blocks(x, z, 0.3):
+			return false
+		for s in solids:
+			if (s as AABB).grow(0.25).has_point(Vector3(x, 0.2, z)):
+				return false
+		return true
+	add_child(Ground.tufts(level, 2400, free))
+	add_child(Ground.pebbles(level, free))
 
 
 func _build_village() -> Array:
@@ -1248,7 +1241,7 @@ func _build_trees() -> void:
 			var hw: float = v.half_width + maxf(0.0, z - v.flare_z) * v.flare
 			x = side * _rng.randf_range(12.0, hw - 1.0)
 		if shed.blocks(x, z, 1.2) or Scenery.on_lake(level, x, z, 2.0) \
-				or Scenery.near_stream(level, x, z, 2.0) or Vector2(x - SPAWN.x, z - SPAWN.z).length() < 4.0 \
+				or Scenery.near_stream(level, x, z, 1.5) or Vector2(x - SPAWN.x, z - SPAWN.z).length() < 4.0 \
 				or absf(z - float(v.gate_z)) < 1.6:
 			continue
 		var s := _rng.randf_range(0.8, 1.4) if i < 30 else _rng.randf_range(0.9, 1.7)
@@ -1278,7 +1271,7 @@ func _build_flowers() -> void:
 		else:
 			x = rng.randf_range(-20.0, 20.0)
 			z = rng.randf_range(5.0, 19.5)
-		var blocked := shed.blocks(x, z, 0.3)
+		var blocked := shed.blocks(x, z, 0.3) or Scenery.near_stream(level, x, z, 0.5)
 		for s in solids:
 			if s.grow(0.3).has_point(Vector3(x, 0.2, z)):
 				blocked = true
