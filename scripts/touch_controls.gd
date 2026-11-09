@@ -321,22 +321,26 @@ func _draw() -> void:
 	draw_texture_rect(UiTheme.tex("stick_ring"), Rect2(base - Vector2(rr, rr), Vector2(rr, rr) * 2.0), false, Color(1, 1, 1, a))
 	_disc(knob, 36.0, Color(1.0, 0.95, 0.85, a))
 	if _stick_finger == NONE:
-		_label(font, "MOVE", base + Vector2(0, STICK_RADIUS + 24), 22, Color(1, 1, 1, 0.8))
+		_label(font, "MOVE", base + Vector2(0, STICK_RADIUS + 24), 20, Color(1, 0.96, 0.86, 0.85))
 	# Melt button (or the shop button in the shed)
 	var mc := melt_center()
 	var press := Vector2(0, 5) if _melt_finger != NONE else Vector2.ZERO
 	if action_text != "":
-		var col := Color(0.4, 0.78, 0.42) if action_ok else Color(0.66, 0.62, 0.58, 0.9)
+		var col := Color(0.42, 0.74, 0.42) if action_ok else Color(0.66, 0.62, 0.58, 0.9)
 		_disc(mc + press, MELT_RADIUS, col)
 		var big := 44 if action_text.length() <= 4 else 32
-		_label(font, action_text, mc + press + Vector2(0, -12 if action_sub != "" else 0), big, UiTheme.CREAM)
+		_label(font, action_text, mc + press + Vector2(0, -14 if action_sub != "" else 0), big, UiTheme.CREAM)
 		if action_sub != "":
-			_label(font, action_sub, mc + press + Vector2(0, 34), 26, UiTheme.CREAM)
+			# The price, with a water drop in front of it.
+			var w := font.get_string_size(action_sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x
+			var at := mc + press + Vector2(0, 32)
+			_icon("drop", at + Vector2(-w * 0.5 - 4, 0), 30.0)
+			_label(font, action_sub, at + Vector2(15, 0), 26, UiTheme.CREAM)
 	else:
-		var hot := Color(1.0, 0.56, 0.22, 1.0 if melting else 0.82)
+		var hot := Color(0.98, 0.6, 0.26, 1.0 if melting else 0.86)
 		_disc(mc + press, MELT_RADIUS, hot)
-		_label(font, "🔥", mc + press + Vector2(0, -16), 54, Color.WHITE)
-		_label(font, "HOLD TO MELT", mc + press + Vector2(0, 44), 21, UiTheme.CREAM)
+		_icon("flame", mc + press + Vector2(0, -16), 92.0 if melting else 84.0)
+		_label(font, "MELT", mc + press + Vector2(0, 50), 24, UiTheme.CREAM)
 	# Jump / jetpack button, with the fuel gauge around it
 	var jc := jump_center()
 	var jp := Vector2(0, 4) if _jump_finger != NONE else Vector2.ZERO
@@ -344,9 +348,13 @@ func _draw() -> void:
 		draw_arc(jc, JUMP_RADIUS + 12.0, 0, TAU, 48, UiTheme.INK, 11.0)
 		var fc := Color(0.5, 0.92, 1.0) if fuel > 0.25 else Color(1.0, 0.5, 0.3)
 		draw_arc(jc, JUMP_RADIUS + 12.0, -PI / 2.0, -PI / 2.0 + TAU * fuel, 48, fc, 6.0)
-	_disc(jc + jp, JUMP_RADIUS, Color(0.48, 0.72, 0.98, 0.95 if _jump_finger != NONE else 0.82))
-	_label(font, "JUMP", jc + jp + Vector2(0, -8), 25, UiTheme.CREAM)
-	_label(font, "hold = fly", jc + jp + Vector2(0, 18), 15, UiTheme.CREAM)
+	_disc(jc + jp, JUMP_RADIUS, Color(0.5, 0.7, 0.9, 0.95 if _jump_finger != NONE else 0.86))
+	_icon("jump", jc + jp + Vector2(0, -12), 50.0)
+	_label(font, "JUMP", jc + jp + Vector2(0, 28), 19, UiTheme.CREAM)
+
+
+func _icon(name: String, center: Vector2, px: float) -> void:
+	draw_texture_rect(UiTheme.icon(name), Rect2(center - Vector2(px, px) * 0.5, Vector2(px, px)), false)
 
 
 func _label(font: Font, s: String, center: Vector2, font_size: int, color: Color) -> void:
@@ -355,5 +363,5 @@ func _label(font: Font, s: String, center: Vector2, font_size: int, color: Color
 	var at := Vector2(center.x - w * 0.5, center.y + font_size * 0.35)
 	var outline := UiTheme.INK
 	outline.a = color.a
-	draw_string_outline(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, maxi(4, font_size / 4), outline)
+	draw_string_outline(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, maxi(4, font_size / 6), outline)
 	draw_string(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)

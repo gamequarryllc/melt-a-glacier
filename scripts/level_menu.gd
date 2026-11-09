@@ -43,11 +43,14 @@ func _build() -> void:
 	panel.offset_right = -50
 	panel.offset_top = 16
 	panel.offset_bottom = -16
-	panel.add_theme_stylebox_override("panel", _paper(PAPER, 5, 12, 20))
+	panel.add_theme_stylebox_override("panel", UiTheme.cover())
 	add_child(panel)
+	var page := PanelContainer.new()
+	page.add_theme_stylebox_override("panel", UiTheme.paper(22.0))
+	panel.add_child(page)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	panel.add_child(v)
+	v.add_theme_constant_override("separation", 6)
+	page.add_child(v)
 
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 16)
@@ -56,8 +59,9 @@ func _build() -> void:
 	titles.add_theme_constant_override("separation", 0)
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(titles)
-	var title := _ink(34)
-	title.text = "🗺️ Where to next?"
+	var title := _ink(38, Color(0.66, 0.22, 0.15))
+	title.add_theme_font_override("font", UiTheme.display_font())
+	title.text = "Where to next?"
 	titles.add_child(title)
 	var sub := _ink(19, INK_SOFT)
 	sub.text = "More glaciers are on their way. Here's what's coming!"
@@ -68,10 +72,7 @@ func _build() -> void:
 	UiTheme.colored_button(back, BROWN)
 	back.pressed.connect(close)
 	head.add_child(back)
-	var rule := ColorRect.new()
-	rule.color = BROWN
-	rule.custom_minimum_size = Vector2(0, 3)
-	v.add_child(rule)
+	v.add_child(UiTheme.rule_rect())
 
 	# The maps, PER_ROW to a row, each row centred.
 	var scroll := ScrollContainer.new()
@@ -107,7 +108,7 @@ func _card(i: int) -> Control:
 	var ready: bool = m.get("ready", false)
 	var card := PanelContainer.new()
 	card.custom_minimum_size = CARD_SIZE
-	card.add_theme_stylebox_override("panel", _paper(CARD_PAPER if ready else CARD_LATER, 3, 10, 12))
+	card.add_theme_stylebox_override("panel", _paper(CARD_PAPER if ready else CARD_LATER, 3, 3, 12))
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 2)
@@ -133,7 +134,7 @@ func _card(i: int) -> Control:
 	v.add_child(blurb)
 	if ready:
 		var done := _ink(16, GREEN)
-		done.text = ("✔️ Melted in %s" % Fmt.duration(GameState.play_time)) if GameState.has_won else "📍 You're here"
+		done.text = ("Melted in %s" % Fmt.duration(GameState.play_time)) if GameState.has_won else "You are here"
 		done.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		v.add_child(done)
 		var again := Button.new()
@@ -146,13 +147,13 @@ func _card(i: int) -> Control:
 		v.add_child(again)
 		card.gui_input.connect(func(e: InputEvent):
 			if _is_tap(e):
-				_note.text = "%s %s: melt it all again, from a fresh glacier." % [m.icon, m.name])
+				_note.text = "%s: melt it all again, from a fresh glacier." % m.name)
 	else:
 		var stamp := _stamp(i)
 		v.add_child(stamp)
 		card.gui_input.connect(func(e: InputEvent):
 			if _is_tap(e):
-				_note.text = "%s %s is still freezing over. Coming soon!" % [m.icon, m.name]
+				_note.text = "%s is still freezing over. Coming soon!" % m.name
 				_thump(stamp.get_child(0) as Control))
 	return card
 
