@@ -71,7 +71,7 @@ Store builds (Android App Bundle, and the iPhone build on Codemagic) are made by
 | The level: each glacier's shape, its crevasses and the valley around them are one dictionary, so more levels (or more glaciers in one level) are more dictionaries | `scripts/levels.gd` |
 | A fence across the valley keeps you off the lake. Its gate is locked until the village is free, then swings open. Your helpers retire and party in the village, and you hire a new crew for the lake at the same prices. Tools and upgrades carry over | `World._build_fence()`, `GameState.check_win()` |
 | First-person walking (CharacterBody3D on the ice's collision mesh), step-up, a jetpack (hold JUMP, fuel refills on landing) and a respawn button | `scripts/player.gd` |
-| The valley: generated mountains with rock and snow, a cloudy sky, the lake and a meltwater stream, pine forest, boulders | `scripts/scenery.gd`, `shaders/` |
+| The valley: generated mountains (cut rock, a grassy apron, pine woods up to the tree line, snow), a cloudy sky, the lake with a sandy shore, pine forest, boulders. The valley floor is bare moraine that grows over with grass in patches as the glacier melts, with tufts of grass, pebbles and trodden paths. A river starts at a waterfall on the back wall, runs under the glacier and through the village, comes out of an ice cave at the snout and goes down to the lake | `scripts/scenery.gd`, `scripts/ground.gd`, `shaders/` |
 | The heat tool: aim with the crosshair, hold to melt a ball of ice. Each tool has its own 3D effect, drawn like a cartoon (flat colours, hard edges, brush strokes): gusts of hot air curling out of the hair dryer, rays of lamp light with dust glinting in them, a blue torch flame and jet, billowing fire with embers, a rope of lava that arcs, drips and splashes, and a column of sunlight from space with a crown of fire. Where it lands the ice steams, sparks or flurries. Upgrades show in it: Wider Nozzle makes it wider where it lands, Longer Reach makes it go further, Heat Output makes it brighter and denser | `Player._update_tool()`, `scripts/tool_fx.gd`, `shaders/toon_puff.gdshaderinc`, `shaders/wind_lines.gdshader`, `shaders/toon_flame.gdshader`, `shaders/lava_stream.gdshader`, `tests/spray_shots.gd` |
 | The shed is a walk-in store: tools hang on the pegboard, upgrades sit on the workbench, helpers wait in the hiring corner, finds go on the shelf by the door, and the catalogue on the table has the boost and purchases. Look at anything for a paper price card, then buy it where it stands | `scripts/shed.gd`, `Hud.set_shop_info()` |
 | 6 tools bought in order at the shed: Hair Dryer, Heat Lamp, Blowtorch, Flamethrower, Lava Hose, Orbital Mirror (the same models you hold) | `Balance.TOOLS`, `scripts/props.gd` |
@@ -101,11 +101,12 @@ export_presets.cfg       Web (playtest) and Android export presets
 scenes/world.tscn        the only scene; everything is built in code
 scripts/balance.gd       ALL tunable numbers: layers, tools, upgrades, helpers, finds, ad rules
 scripts/game_state.gd    autoload: economy, shed purchases, save/load
-scripts/levels.gd        level descriptions: glacier shape, crevasses, valley, stream
+scripts/levels.gd        level descriptions: glacier shape, crevasses and ice caves, valley, river, paths
 scripts/world.gd         builds the valley (village, finds) and wires everything up
 scripts/shed.gd          the walk-in shed: building, sections, what you look at and buy
 scripts/props.gd         models of the six tools and the upgrade items
-scripts/scenery.gd       mountains, sky, lake, stream, forest, boulders
+scripts/scenery.gd       mountains, sky, lake, river and waterfall, forest, boulders
+scripts/ground.gd        the valley floor: river bed, lake shore, grass, tufts, pebbles
 scripts/ice_field.gd     the glacier: density field, meshing, melting, collision, save string
 scripts/player.gd        first-person movement, jetpack, respawn, the heat tool
 scripts/tool_fx.gd       what comes out of each tool (flames, beams, sparks, steam), sized by your upgrades
@@ -123,7 +124,7 @@ scripts/audio/sound.gd   autoload "Sound": every sound effect, the music and the
 audio/                   the sounds (sfx/), wind and birds (amb/) and the music (music/), built by art/audio/
 default_bus_layout.tres  audio buses: Music, Ambience, SFX
 scripts/monetization/    ad + IAP interface, stub provider, autoload facade
-shaders/                 ice, mountain rock and snow, sky, water, shed wood, the tools' flames and sparks
+shaders/                 ice, mountain rock and snow, the valley floor, grass, sky, lake and river water, shed wood, the tools' flames and sparks
 fonts/                   subset Noto Color Emoji (the placeholder art) + license
 tests/smoke_test.gd      headless test: godot --headless -s res://tests/smoke_test.gd
 tests/screenshots.gd     renders screenshots of key moments (see the top of the file)

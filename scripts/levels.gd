@@ -39,6 +39,12 @@ const VALLEY := {
 				{"z": -6.0, "bow": 1.2, "depth": 2.4, "width": 0.5, "x0": 4.5, "x1": 13.0},
 				{"z": -1.8, "bow": 1.0, "depth": 1.8, "width": 0.45, "x0": -9.5, "x1": 7.5},
 			],
+			# Ice caves where the river goes in at the back and comes out at the
+			# snout: tunnels from a to b (x, z), with the arch's half-width and height.
+			"caves": [
+				{"a": Vector2(-2.7, 4.2), "b": Vector2(-2.2, -4.5), "half": 1.5, "height": 1.7},
+				{"a": Vector2(12.2, -30.5), "b": Vector2(11.6, -25.5), "half": 1.4, "height": 1.6},
+			],
 		},
 		{
 			# The lake froze solid and disappeared under an ice cap. You can see
@@ -93,9 +99,23 @@ const VALLEY := {
 		"snow_line": 17.0,
 		# The fence across the valley that keeps you off the lake until the village is free.
 		"gate_z": 21.0,
-		# Meltwater runs from under the snout down to the lake.
-		"stream": [Vector2(-2.5, 2.0), Vector2(-4.0, 8.0), Vector2(-8.0, 13.5), Vector2(-10.0, 19.0),
-				Vector2(-11.5, 25.0), Vector2(-13.5, 33.0)],
+		# The river. It starts as a waterfall off the snowfield on the back wall,
+		# runs under the glacier (down the east side of the village, then across
+		# in front of the square), comes out of an ice cave at the snout and
+		# goes on down to the lake. The first point is hidden in the foot of the
+		# back wall; the second is the plunge pool.
+		"stream": [Vector2(12.8, -39.8), Vector2(12.6, -36.2), Vector2(12.0, -31.0), Vector2(11.4, -24.0),
+				Vector2(11.1, -16.5), Vector2(10.8, -11.0), Vector2(7.0, -7.0), Vector2(0.5, -5.2),
+				Vector2(-2.3, -2.0), Vector2(-2.6, 2.5), Vector2(-4.0, 8.0), Vector2(-8.0, 13.5),
+				Vector2(-10.0, 19.0), Vector2(-11.5, 25.0), Vector2(-13.5, 33.0)],
+		"falls_top": Vector2(13.6, -47.5),   # where the waterfall starts, up on the back wall
+		# Trodden paths (bare earth): shed door to the gate and on to the lake,
+		# and up to the glacier and the village under it.
+		"paths": [
+			[Vector2(8.7, 11.5), Vector2(5.5, 12.6), Vector2(2.0, 15.2), Vector2(0.3, 18.0), Vector2(0.0, 21.0),
+				Vector2(-0.5, 25.0), Vector2(0.5, 29.5)],
+			[Vector2(2.0, 15.2), Vector2(1.8, 9.5), Vector2(1.0, 4.0), Vector2(1.6, -3.0), Vector2(1.0, -9.0)],
+		],
 	},
 }
 

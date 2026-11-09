@@ -159,6 +159,8 @@ func generate(p_spec: Dictionary, p_seed: int, carve: Array = [], mesh_now: bool
 				lay[s] = clampi(int((h - y) / layer_depth), 0, nl)
 	for cv in spec.get("crevasses", []):
 		_cut_crevasse(cv)
+	for cave in spec.get("caves", []):
+		_carve_cave(cave)
 	for box in carve:
 		_carve_box((box as AABB).grow(0.25))
 	_count()
@@ -264,6 +266,34 @@ func _cut_crevasse(cv: Dictionary) -> void:
 				var v := clampf(0.5 + (dz - open) / (2.0 * res), 0.0, 1.0)
 				var s := c + plane * j
 				f[s] = minf(f[s], v)
+
+
+func _carve_cave(cave: Dictionary) -> void:
+	## An arched tunnel along the ground from a to b (where the river runs
+	## under the ice). Where the ice is thinner than the arch it opens to the sky.
+	var a: Vector2 = cave.a
+	var b: Vector2 = cave.b
+	var half: float = cave.half
+	var height: float = cave.height
+	var ab := b - a
+	var reach := half + res * 2.0
+	var i0 := clampi(int(floor((minf(a.x, b.x) - reach - origin.x) / res)), 1, nx - 2)
+	var i1 := clampi(int(ceil((maxf(a.x, b.x) + reach - origin.x) / res)), 1, nx - 2)
+	var k0 := clampi(int(floor((minf(a.y, b.y) - reach - origin.z) / res)), 1, nz - 2)
+	var k1 := clampi(int(ceil((maxf(a.y, b.y) + reach - origin.z) / res)), 1, nz - 2)
+	var j1 := clampi(int(ceil(height / res)) + 2, 0, ny - 1)
+	for k in range(k0, k1 + 1):
+		for i in range(i0, i1 + 1):
+			var p := Vector2(origin.x + i * res, origin.z + k * res)
+			var t := clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+			var across := p.distance_to(a + ab * t) / half
+			if across > 1.0 + res * 2.0 / half:
+				continue
+			for j in range(0, j1 + 1):
+				var up := (j * res) / height
+				var sd := (sqrt(across * across + up * up) - 1.0) * minf(half, height)
+				var s := _s(i, j, k)
+				f[s] = minf(f[s], clampf(0.5 + sd / (2.0 * res), 0.0, 1.0))
 
 
 func _carve_box(box: AABB) -> void:
