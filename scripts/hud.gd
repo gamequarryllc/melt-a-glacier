@@ -121,11 +121,13 @@ func _ready() -> void:
 	toast_box.offset_right = 400
 	toast_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(toast_box)
 	popups = Control.new()
 	popups.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	popups.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(popups)
+	# Toasts go on top of the catalogue and the popups: "Purchase failed..."
+	# is said while the catalogue is open.
+	root.add_child(toast_box)
 	_build_rotate_overlay()
 	_apply_safe_area()
 	get_viewport().size_changed.connect(_apply_safe_area)

@@ -343,6 +343,7 @@ func _run() -> void:
 	world.use_aimed()
 	await _frames(1)
 	check(hud.catalogue_open and hud._list_box.get_child_count() >= 4 and not player.input_enabled, "the catalogue opens")
+	check(hud.toast_box.get_index() > hud._catalogue.get_index(), "messages (like a failed purchase) show on top of the open catalogue")
 	root.push_input(key)
 	await _frames(1)
 	check(not hud.catalogue_open and player.input_enabled, "and closes again")

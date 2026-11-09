@@ -66,14 +66,14 @@ func set_ads_removed(removed: bool) -> void:
 
 func purchase(product_id: String) -> void:
 	if store == null:
-		purchase_failed.emit(product_id, "the store isn't available")
+		purchase_failed.emit(product_id, "the store isn't set up in this build yet")
 	else:
 		store.purchase(product_id)
 
 
 func restore_purchases() -> void:
 	if store == null:
-		restore_finished.emit(0, "the store isn't available")
+		restore_finished.emit(0, "the store isn't set up in this build yet")
 	else:
 		store.restore()
 
