@@ -70,13 +70,15 @@ const TOOLS = [
 
 # Shed upgrades. Effect = 1 + per_level * level. Cost = base * growth^level.
 # Heat Output keeps going past its first 25 levels ("overdrive"): each level
-# from over_from up multiplies the heat by over_mult instead. Those cost
-# hundreds of millions, so they only come into play at the bottom of the
-# frozen lake, where everything else is bought and the ice is at its hardest
-# (Alex: the end dragged with nothing left to buy).
+# from over_from up multiplies the heat by over_mult instead, and its price
+# goes up by over_growth. Those cost hundreds of millions, so they only come
+# into play at the bottom of the frozen lake, where everything else is bought
+# and the ice is at its hardest (Alex: the end dragged with nothing left to
+# buy). Income grows about as fast as their price, so there's another one to
+# buy every couple of minutes until the lake is free.
 const UPGRADES = [
 	{"key": "heat", "name": "Heat Output", "icon": "🌡️", "base": 25.0, "growth": 1.85, "per_level": 0.25, "max": 35,
-		"over_from": 25, "over_mult": 1.3,
+		"over_from": 25, "over_mult": 1.3, "over_growth": 1.5,
 		"desc": "+25% melting power", "over_desc": "Overdrive! x1.3 melting power"},
 	{"key": "nozzle", "name": "Wider Nozzle", "icon": "📏", "base": 100.0, "growth": 2.8, "per_level": 0.07, "max": 10,
 		"desc": "+7% heat zone size"},

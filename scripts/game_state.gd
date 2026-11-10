@@ -301,7 +301,9 @@ func upgrade_maxed(key: String) -> bool:
 
 func upgrade_cost(key: String) -> float:
 	var u := upgrade_def(key)
-	return float(u.base) * pow(float(u.growth), float(upgrade_levels[key]))
+	var lvl := int(upgrade_levels[key])
+	var plain := mini(lvl, int(u.get("over_from", lvl)))
+	return float(u.base) * pow(float(u.growth), plain) * pow(float(u.get("over_growth", u.growth)), lvl - plain)
 
 
 func buy_upgrade(key: String) -> bool:
