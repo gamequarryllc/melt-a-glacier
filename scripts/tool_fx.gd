@@ -14,6 +14,16 @@ extends Node3D
 ## - Lava hose: one heavy rope of lava that arcs, drips and splashes.
 ## - Orbital mirror: an aiming laser, and a column of sunlight from space with
 ##   a crown of fire where it lands.
+## Frozen Harbor's tools, each sillier than the last:
+## - Dragon puppet: green dragon fire billowing out, purple embers.
+## - Lightning rod: a storm cloud gathers over the spot and jagged bolts
+##   crack down from it, re-drawn every few frames.
+## - Meteor remote: meteors streak down from the sky onto the spot, each
+##   landing with a shockwave ring and flying rocks.
+## - Pocket sun: a little sun hangs over the spot on a golden beam from the
+##   lantern, with flares licking off it.
+## - Supernova in a jar: a violet beam full of stars, and rings of
+##   cosmic shockwave rolling out where it lands.
 ## Clouds of steam boil up off the ice for all of them (more for the hotter tools).
 ## Upgrades show: Wider Nozzle makes it wider where it lands, Longer Reach lets
 ## it go further, Heat Output makes it hotter coloured, brighter and denser.
@@ -30,13 +40,20 @@ const PUFF_TOP_SHADER := preload("res://shaders/toon_puff_top.gdshader")
 const WIND_SHADER := preload("res://shaders/wind_lines.gdshader")
 const FLAME_SHADER := preload("res://shaders/toon_flame.gdshader")
 const LAVA_SHADER := preload("res://shaders/lava_stream.gdshader")
+const SUN_SHADER := preload("res://shaders/sun_orb.gdshader")
 const LAVA_SPEED := 12.0                     # how fast the lava leaves the hose, m/s
 const LAVA_FALL := 4.0                       # and how hard it falls
 const SUN_DIR := Vector3(0.32, 1.0, 0.18)    # where the orbital mirror's sunlight comes from
 const SKY_LEN := 140.0                       # how far up the sunlight column goes
 # The colour the ice glows where each tool's heat lands.
-const GLOW := [Color(1.0, 0.62, 0.45), Color(1.0, 0.62, 0.25), Color(0.45, 0.62, 1.0),
-	Color(1.0, 0.45, 0.12), Color(1.0, 0.34, 0.05), Color(1.0, 0.86, 0.5)]
+const GLOW := {"hair_dryer": Color(1.0, 0.62, 0.45), "heat_lamp": Color(1.0, 0.62, 0.25),
+	"blowtorch": Color(0.45, 0.62, 1.0), "flamethrower": Color(1.0, 0.45, 0.12), "lava_hose": Color(1.0, 0.34, 0.05),
+	"orbital_mirror": Color(1.0, 0.86, 0.5), "dragon_puppet": Color(0.55, 1.0, 0.4), "lightning_rod": Color(0.55, 0.75, 1.0),
+	"meteor_remote": Color(1.0, 0.45, 0.1), "pocket_sun": Color(1.0, 0.8, 0.3), "supernova_jar": Color(0.85, 0.45, 1.0)}
+const STORM_HEIGHT := 9.0                   # how high the lightning rod's storm cloud hangs over the spot
+const METEOR_FROM := Vector3(-0.35, 1.0, -0.25)   # where the meteors come from
+const METEOR_HEIGHT := 40.0
+const METEOR_SPEED := 34.0
 
 # The parts of the current tool's effect (rebuilt when the tool or its upgrades change).
 var _streams: Array = []     # {p, speed, spread[, size, fall, life]}: fly from the nozzle to the ice
@@ -48,6 +65,13 @@ var _lava_head := 0.0        # how far along its arc the stream has got (0..1)
 var _lava_tail := 0.0        # and how far its end has got after you let go
 var _drips: CPUParticles3D   # lava dripping off the stream on its way
 var _laser: MeshInstance3D   # the orbital mirror's aiming laser
+var _bolt: MeshInstance3D    # the lightning rod's bolts (an ImmediateMesh re-drawn now and then)
+var _bolt_timer := 0.0
+var _sky: Array = []         # {p, height}: particles hanging over the spot (storm cloud)
+var _meteors: Array = []     # {p, speed}: particles falling from the sky onto the spot
+var _orb: MeshInstance3D     # the pocket sun
+var _rings: Array = []       # {mi, period, offset, size}: shockwaves rolling out where it lands
+var _bolt_rng := RandomNumberGenerator.new()
 var _tip: MeshInstance3D     # a glow at the nozzle
 var _light: OmniLight3D
 var _style: Dictionary = {}
@@ -63,7 +87,7 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 	## active: the melt button is held. from: the nozzle. to: where it lands
 	## (the ice, or as far as the tool reaches). hit: it's landing on ice.
 	var tool_i: int = GameState.tool_index
-	var gold: bool = GameState.golden_equipped and tool_i == 0
+	var gold: bool = GameState.golden_equipped and fx_of(tool_i) == "hair_dryer"
 	var key := "%d/%s/%d/%d" % [tool_i, gold, int(GameState.upgrade_levels.get("nozzle", 0)), int(GameState.upgrade_levels.get("heat", 0))]
 	if key != _built:
 		_build(tool_i, gold)
@@ -185,6 +209,48 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 			m.set_shader_parameter("strength", 0.85 * _on)
 			m.set_shader_parameter("fade_out", 0.9 if hit else 0.45)   # into thin air when it falls short
 
+	# Frozen Harbor's tools.
+	for sk in _sky:
+		var p: CPUParticles3D = sk.p
+		p.emitting = active and hit
+		if p.emitting:
+			p.global_transform = Transform3D(Basis.IDENTITY, to + Vector3.UP * float(sk.height))
+			p.emission_box_extents = Vector3(radius * 1.2, 0.6, radius * 1.2)
+	for mt in _meteors:
+		var p: CPUParticles3D = mt.p
+		p.emitting = active
+		if not p.emitting:
+			continue
+		var origin := to + METEOR_FROM.normalized() * METEOR_HEIGHT
+		p.global_transform = Transform3D(_facing((to - origin).normalized()), origin)
+		p.lifetime = METEOR_HEIGHT / float(mt.speed)
+		p.emission_sphere_radius = radius * 0.5
+	if _bolt != null:
+		_bolt.visible = _on > 0.5 and hit
+		_bolt_timer -= delta
+		if _bolt.visible and _bolt_timer <= 0.0:
+			_bolt_timer = _bolt_rng.randf_range(0.05, 0.12)
+			_draw_bolts(to + Vector3.UP * (STORM_HEIGHT - 0.5), to, radius, from)
+	if _orb != null:
+		_orb.visible = _on > 0.01
+		if _orb.visible:
+			var size := radius * 0.36 * (0.6 + 0.4 * _on) * (1.0 + 0.04 * sin(_t * 13.0))
+			var spot := (to + normal * (radius * 0.6)) if hit else to
+			_orb.global_transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * size).rotated(Vector3.UP, _t * 0.7), spot)
+			(_orb.material_override as ShaderMaterial).set_shader_parameter("time", _t)
+	for r in _rings:
+		var mi: MeshInstance3D = r.mi
+		mi.visible = _on > 0.3 and hit
+		if not mi.visible:
+			continue
+		var ph := fposmod(_t / float(r.period) + float(r.offset), 1.0)
+		var sz := radius * float(r.size) * (0.15 + 0.85 * ph)
+		var rb := _facing(normal) * Basis(Vector3.BACK, _t * 0.5) * Basis.from_scale(Vector3(sz, sz, 1.0))
+		mi.global_transform = Transform3D(rb, to + normal * 0.15)
+		var rm := mi.material_override as StandardMaterial3D
+		var c: Color = r.color
+		rm.albedo_color = Color(c.r, c.g, c.b, c.a * (1.0 - ph * ph) * _on)
+
 	if _tip != null:
 		_tip.visible = _on > 0.01
 		_tip.global_position = from
@@ -201,8 +267,13 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 		_light.omni_range = 2.5 + radius * 2.5
 
 
+static func fx_of(tool_i: int) -> String:
+	## Which look tool i has (Balance.TOOLS[i].fx).
+	return str(Balance.TOOLS[clampi(tool_i, 0, Balance.TOOLS.size() - 1)].get("fx", "hair_dryer"))
+
+
 static func glow_color(tool_i: int) -> Color:
-	return GLOW[clampi(tool_i, 0, GLOW.size() - 1)]
+	return GLOW.get(fx_of(tool_i), Color(1.0, 0.62, 0.45))
 
 
 static func _facing(dir: Vector3) -> Basis:
@@ -225,6 +296,11 @@ func _build(tool_i: int, gold: bool) -> void:
 	_lava = null
 	_laser = null
 	_tip = null
+	_bolt = null
+	_orb = null
+	_sky.clear()
+	_meteors.clear()
+	_rings.clear()
 	var heat_lv := int(GameState.upgrade_levels.get("heat", 0))
 	var heat := 1.0 + heat_lv / 25.0               # 1 .. 2 with Heat Output maxed
 	var hot := clampf(heat_lv / 25.0, 0.0, 1.0)    # 0 .. 1: hotter looks brighter and whiter
@@ -237,17 +313,27 @@ func _build(tool_i: int, gold: bool) -> void:
 	_light.omni_attenuation = 1.4
 	_light.visible = false
 	add_child(_light)
-	match tool_i:
-		0:
+	match fx_of(tool_i):
+		"hair_dryer":
 			_build_hair_dryer(gold, heat, hot, more)
-		1:
+		"heat_lamp":
 			_build_heat_lamp(heat, hot, more)
-		2:
+		"blowtorch":
 			_build_blowtorch(heat, hot, more)
-		3:
+		"flamethrower":
 			_build_flamethrower(heat, hot, more)
-		4:
+		"lava_hose":
 			_build_lava_hose(heat, hot, more, fat)
+		"dragon_puppet":
+			_build_dragon_puppet(heat, hot, more)
+		"lightning_rod":
+			_build_lightning_rod(heat, hot, more)
+		"meteor_remote":
+			_build_meteor_remote(heat, hot, more)
+		"pocket_sun":
+			_build_pocket_sun(heat, hot, more)
+		"supernova_jar":
+			_build_supernova_jar(heat, hot, more)
 		_:
 			_build_orbital_mirror(heat, hot, more)
 
@@ -479,6 +565,291 @@ func _build_orbital_mirror(heat: float, hot: float, more: float) -> void:
 	_spray(sparkle, 15.0, 1.0, 3.0, 3.0, 1.0)
 	_impacts.append({"p": sparkle, "ring": 0.8})
 	_add_steam(int(18 * more), 0.8, 3.6)
+
+
+func _build_dragon_puppet(heat: float, hot: float, more: float) -> void:
+	_style = {"heat": heat, "light": 2.4 + 0.7 * hot, "flicker": 1.0}
+	# Dragon fire: green, billowing, with a hot yellow-white heart and purple
+	# smoke at its edges.
+	var core := Color(0.95, 1.0, 0.7).lerp(Color.WHITE, hot * 0.5)
+	var lime := Color(0.6, 1.0, 0.25)
+	var green := Color(0.18, 0.78, 0.3)
+	var teal := Color(0.05, 0.45, 0.4)
+	var fire := _toon(int(34 * more), true, {"col_core": lime, "col_mid": green, "col_edge": teal,
+		"col_end": Color(0.32, 0.18, 0.42), "end_from": 0.75, "lump": 0.5, "erode": 0.5, "churn": 1.0})
+	fire.initial_velocity_min = 13.0
+	fire.initial_velocity_max = 15.0
+	fire.scale_amount_curve = _curve(0.08, 1.0)
+	fire.gravity = Vector3(0, 2.5, 0)
+	_streams.append({"p": fire, "speed": 14.0, "spread": 0.45, "size": 0.8})
+	var heart := _toon(int(24 * more), true, {"col_core": core, "col_mid": lime.lerp(core, 0.4), "col_edge": lime,
+		"lump": 0.45, "erode": 1.0, "churn": 0.9}, 1)
+	heart.initial_velocity_min = 14.0
+	heart.initial_velocity_max = 15.0
+	heart.scale_amount_curve = _curve(0.12, 1.0)
+	heart.gravity = Vector3(0, 2.5, 0)
+	_streams.append({"p": heart, "speed": 14.5, "spread": 0.18, "size": 0.46 + 0.08 * hot})
+	_add_flame(core, lime, green, {"len": 0.7, "r0": 0.08, "r1": 0.03, "bulge": 0.1, "rough": 0.7,
+		"scroll": 7.0, "flicker": 0.18})
+	# Purple and pink embers swirling along.
+	var embers := _sparks([Color(1.0, 0.8, 1.0, 1.0), Color(0.85, 0.35, 1.0, 0.9), Color(0.5, 0.2, 0.8, 0.0)], 0.05, 4.0, 30)
+	embers.initial_velocity_min = 10.0
+	embers.initial_velocity_max = 15.0
+	embers.gravity = Vector3(0, 3.0, 0)
+	_streams.append({"p": embers, "speed": 12.0, "spread": 1.0, "life": 1.3})
+	var splash := _toon(int(16 * more), false, {"col_core": lime, "col_mid": green, "col_edge": teal,
+		"col_end": Color(0.32, 0.18, 0.42), "end_from": 0.7, "lump": 0.45, "erode": 1.0, "churn": 0.9})
+	_spray(splash, 80.0, 2.5, 5.5, 1.0, 0.6)
+	splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": splash, "area": 0.35, "size": 0.45})
+	_tip = _glow_tip(0.35, Color(0.6, 1.0, 0.4, 0.9))
+	_add_steam(int(18 * more), 0.8, 3.4)
+
+
+func _build_lightning_rod(heat: float, hot: float, more: float) -> void:
+	_style = {"heat": heat, "light": 3.6 + 1.0 * hot, "flicker": 2.0}
+	# A storm cloud boiling over the spot: dark, lumpy, lit blue from inside.
+	var cloud := _toon(int(26 * more), false, {"col_core": Color(0.55, 0.6, 0.75), "col_mid": Color(0.32, 0.35, 0.48),
+		"col_edge": Color(0.16, 0.17, 0.26), "lump": 0.5, "erode": 0.6, "shade": 0.6, "churn": 0.3, "alpha": 0.97, "gain": 1.0})
+	cloud.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	cloud.direction = Vector3(0, 1, 0)
+	cloud.spread = 180.0
+	cloud.initial_velocity_min = 0.2
+	cloud.initial_velocity_max = 0.8
+	cloud.lifetime = 1.6
+	cloud.scale_amount_min = 2.2
+	cloud.scale_amount_max = 3.6
+	cloud.scale_amount_curve = _curve(0.5, 1.0)
+	_sky.append({"p": cloud, "height": STORM_HEIGHT + 0.8})
+	# The bolts: a fat blue one with a white core, forking.
+	_bolt = MeshInstance3D.new()
+	_bolt.mesh = ImmediateMesh.new()
+	var bm := StandardMaterial3D.new()
+	bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bm.vertex_color_use_as_albedo = true
+	bm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	bm.no_depth_test = true
+	bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA   # sorted with the steam, and drawn over it
+	bm.render_priority = 10
+	_bolt.material_override = bm
+	_bolt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_bolt.top_level = true
+	_bolt.visible = false
+	add_child(_bolt)
+	_bolt.global_transform = Transform3D.IDENTITY
+	# A little crackle from the rod up into the sky so you see it's yours.
+	_add_wind(Color(0.85, 0.92, 1.0), Color(0.35, 0.5, 1.0), {"r0": 0.02, "width": 0.12, "lines": 3.0, "speed": 14.0,
+		"twist": 2.0, "wiggle": 0.6, "gap": 1.2, "fill": 0.5, "line": 0.03, "gain": 1.6})
+	# Sparks and blue fire where it strikes.
+	var sparks := _sparks([Color(1, 1, 1, 1), Color(0.6, 0.8, 1.0, 1.0), Color(0.3, 0.45, 1.0, 0.0)], 0.06, 6.0, int(40 * more))
+	_spray(sparks, 75.0, 5.0, 10.0, -12.0, 0.5)
+	sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": sparks, "area": 0.3})
+	var zap := _toon(int(12 * more), false, {"col_core": Color.WHITE, "col_mid": Color(0.6, 0.8, 1.0),
+		"col_edge": Color(0.3, 0.4, 1.0), "lump": 0.45, "erode": 1.0, "churn": 1.0, "gain": 1.4})
+	_spray(zap, 60.0, 1.0, 3.0, 2.0, 0.35)
+	zap.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": zap, "area": 0.3, "size": 0.35})
+	_rings.append({"mi": _ring_mesh(), "period": 0.45, "offset": 0.0, "size": 1.3, "color": Color(0.7, 0.85, 1.0, 0.8)})
+	_tip = _glow_tip(0.3, Color(0.6, 0.8, 1.0, 1.0))
+	_add_steam(int(20 * more), 0.85, 3.8)
+
+
+func _draw_bolts(top: Vector3, bottom: Vector3, radius: float, _from: Vector3) -> void:
+	## Jagged bolts from the cloud to the spot (two or three, forking), as
+	## flat ribbons crossed so they show from any side.
+	var im := _bolt.mesh as ImmediateMesh
+	im.clear_surfaces()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 2 + _bolt_rng.randi() % 2
+	for b in n:
+		var end := bottom + Vector3(_bolt_rng.randf_range(-1, 1), 0, _bolt_rng.randf_range(-1, 1)) * radius * (0.0 if b == 0 else 0.7)
+		var start := top + Vector3(_bolt_rng.randf_range(-1, 1), 0, _bolt_rng.randf_range(-1, 1)) * radius * 0.8
+		var pts := _jag(start, end, 9, 0.45 + 0.12 * radius)
+		var w := 0.6 if b == 0 else 0.36
+		_ribbon(im, pts, w, Color(0.12, 0.2, 0.75))
+		_ribbon(im, pts, w * 0.62, Color(0.45, 0.7, 1.0))
+		_ribbon(im, pts, w * 0.28, Color(1.0, 1.0, 0.85))
+		# A fork off the middle.
+		var k := 3 + _bolt_rng.randi() % 3
+		var fork_end: Vector3 = pts[k] + Vector3(_bolt_rng.randf_range(-1, 1) * 3.0, -_bolt_rng.randf_range(2.0, 4.0), _bolt_rng.randf_range(-1, 1) * 3.0)
+		var fork := _jag(pts[k], fork_end, 4, 0.6)
+		_ribbon(im, fork, w * 0.55, Color(0.12, 0.2, 0.75))
+		_ribbon(im, fork, w * 0.25, Color(1.0, 1.0, 0.85))
+	im.surface_end()
+
+
+func _jag(a: Vector3, b: Vector3, steps: int, wobble: float) -> Array:
+	var pts := [a]
+	for k in range(1, steps):
+		var t := float(k) / steps
+		pts.append(a.lerp(b, t) + Vector3(_bolt_rng.randf_range(-1, 1), _bolt_rng.randf_range(-0.3, 0.3), _bolt_rng.randf_range(-1, 1)) * wobble)
+	pts.append(b)
+	return pts
+
+
+static func _ribbon(im: ImmediateMesh, pts: Array, w: float, c: Color) -> void:
+	for side in [Vector3(1, 0, 0), Vector3(0, 0, 1)]:
+		for k in pts.size() - 1:
+			var a: Vector3 = pts[k]
+			var b: Vector3 = pts[k + 1]
+			var off: Vector3 = side * w * 0.5
+			for v in [a - off, a + off, b + off, a - off, b + off, b - off]:
+				im.surface_set_color(c)
+				im.surface_add_vertex(v)
+
+
+func _build_meteor_remote(heat: float, hot: float, more: float) -> void:
+	_style = {"heat": heat, "light": 3.4 + 0.8 * hot, "flicker": 0.8}
+	# A red aiming laser from the remote.
+	_laser = MeshInstance3D.new()
+	_laser.mesh = _strip_mesh()
+	var lm := ShaderMaterial.new()
+	lm.shader = BEAM_SHADER
+	lm.set_shader_parameter("color_near", Vector3(1.0, 0.3, 0.2))
+	lm.set_shader_parameter("color_far", Vector3(1.0, 0.25, 0.15))
+	lm.set_shader_parameter("r0", 0.01)
+	lm.set_shader_parameter("r1", 0.016)
+	lm.set_shader_parameter("core", 0.6)
+	_laser.material_override = lm
+	_laser.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_laser.top_level = true
+	_laser.custom_aabb = AABB(Vector3(-2000, -2000, -2000), Vector3(4000, 4000, 4000))
+	_laser.visible = false
+	add_child(_laser)
+	# Meteors: white-hot heads with long fiery tails, streaking down.
+	var heads := _blobs([Color(1.0, 0.95, 0.7), Color(1.0, 0.75, 0.3), Color(1.0, 0.5, 0.15)], 0.9, int(6 + 3 * hot), 1.0, false)
+	heads.direction = Vector3(0, 0, -1)
+	heads.spread = 0.0
+	heads.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	heads.initial_velocity_min = METEOR_SPEED
+	heads.initial_velocity_max = METEOR_SPEED
+	_meteors.append({"p": heads, "speed": METEOR_SPEED})
+	var tails := _sparks([Color(1.0, 0.95, 0.7, 1.0), Color(1.0, 0.55, 0.12, 0.95), Color(0.9, 0.25, 0.08, 0.85)], 0.85, 9.0, int(6 + 3 * hot))
+	tails.direction = Vector3(0, 0, -1)
+	tails.spread = 0.0
+	tails.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	tails.initial_velocity_min = METEOR_SPEED
+	tails.initial_velocity_max = METEOR_SPEED
+	_meteors.append({"p": tails, "speed": METEOR_SPEED})
+	# Where they land: a burst of fire, rocks flying, and a shockwave ring.
+	var boom := _toon(int(22 * more), false, {"col_core": Color(1.0, 0.95, 0.6), "col_mid": Color(1.0, 0.6, 0.15),
+		"col_edge": Color(0.85, 0.22, 0.06), "col_end": Color(0.28, 0.22, 0.22), "end_from": 0.65, "lump": 0.5,
+		"erode": 1.0, "churn": 1.0})
+	_spray(boom, 70.0, 3.0, 7.0, 2.0, 0.7)
+	boom.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": boom, "area": 0.35, "size": 0.5})
+	var rocks := _blobs([Color(0.35, 0.3, 0.3), Color(0.25, 0.2, 0.2), Color(0.2, 0.16, 0.16)], 0.22, int(18 * more), 1.0, false)
+	_spray(rocks, 60.0, 6.0, 11.0, -16.0, 0.9)
+	rocks.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": rocks, "area": 0.3})
+	_rings.append({"mi": _ring_mesh(), "period": 0.6, "offset": 0.0, "size": 1.6, "color": Color(1.0, 0.75, 0.35, 0.85)})
+	_rings.append({"mi": _ring_mesh(), "period": 0.6, "offset": 0.5, "size": 1.6, "color": Color(1.0, 0.55, 0.2, 0.7)})
+	_tip = _glow_tip(0.18, Color(1.0, 0.3, 0.2, 0.9))
+	_add_steam(int(22 * more), 0.95, 4.0)
+
+
+func _build_pocket_sun(heat: float, hot: float, more: float) -> void:
+	_style = {"heat": heat, "light": 4.2 + 1.0 * hot, "flicker": 0.3}
+	# A golden beam from the lantern carries the sun to the spot...
+	_add_cone("beam", Color(1.0, 0.9, 0.5), Color(1.0, 0.7, 0.2), {"r0": 0.06, "width": 0.22, "strength": 0.28 + 0.1 * hot,
+		"soft_edge": 0.4, "fade_in": 0.02, "fade_out": 0.95, "noise_amount": 0.3, "noise_scale": 0.4, "scroll": 12.0})
+	_add_wind(Color(1.0, 0.97, 0.75), Color(1.0, 0.65, 0.15), {"r0": 0.05, "width": 0.22, "lines": 6.0, "speed": 18.0,
+		"twist": 1.2, "gap": 1.5, "fill": 0.6, "line": 0.035, "gain": 1.6})
+	# ...where a little sun hangs, burning (sun_orb in this file's shader).
+	_orb = MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 1.0
+	sm.height = 2.0
+	sm.radial_segments = 24
+	sm.rings = 12
+	_orb.mesh = sm
+	var om := ShaderMaterial.new()
+	om.shader = SUN_SHADER
+	om.set_shader_parameter("noise", noise_texture())
+	om.set_shader_parameter("hot", hot)
+	_orb.material_override = om
+	_orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_orb.top_level = true
+	_orb.visible = false
+	add_child(_orb)
+	# Flares licking off it.
+	var flares := _toon(int(26 * more), true, {"col_core": Color(1.0, 0.95, 0.6), "col_mid": Color(1.0, 0.7, 0.15),
+		"col_edge": Color(0.95, 0.35, 0.05), "lump": 0.5, "erode": 1.0, "churn": 1.0}, 1)
+	flares.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	flares.emission_ring_axis = Vector3(0, 0, 1)
+	flares.emission_ring_height = 0.2
+	_spray(flares, 40.0, 1.0, 3.0, 1.5, 0.6)
+	_impacts.append({"p": flares, "ring": 0.5, "size": 0.16, "lift": 0.0})
+	var motes := _sparks([Color(1.0, 0.97, 0.75, 1.0), Color(1.0, 0.8, 0.3, 0.9), Color(1.0, 0.6, 0.15, 0.0)], 0.07, 3.0, int(36 * more))
+	_spray(motes, 90.0, 2.0, 5.0, 2.5, 0.9)
+	motes.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": motes, "area": 0.6})
+	_rings.append({"mi": _ring_mesh(), "period": 1.1, "offset": 0.0, "size": 1.5, "color": Color(1.0, 0.85, 0.4, 0.6)})
+	_tip = _glow_tip(0.4, Color(1.0, 0.8, 0.35, 1.0))
+	_add_steam(int(14 * more), 0.8, 4.2)
+
+
+func _build_supernova_jar(heat: float, hot: float, more: float) -> void:
+	_style = {"heat": heat, "light": 4.8 + 1.2 * hot, "flicker": 0.5}
+	var pink := Color(1.0, 0.45, 0.85)
+	var violet := Color(0.6, 0.3, 1.0)
+	var cyan := Color(0.45, 0.95, 1.0)
+	# A violet beam, wider where it lands, with streaks racing down it.
+	_add_cone("beam", pink, violet, {"r0": 0.08, "width": 0.7, "strength": 0.3 + 0.1 * hot, "soft_edge": 0.45,
+		"fade_in": 0.02, "fade_out": 0.9, "noise_amount": 0.6, "noise_scale": 0.35, "scroll": 16.0})
+	_add_wind(Color(1.0, 0.92, 1.0), violet, {"r0": 0.06, "width": 0.65, "lines": 8.0 + roundf(4.0 * hot), "speed": 22.0,
+		"twist": 1.5, "gap": 1.6, "fill": 0.55, "line": 0.04, "gain": 1.6})
+	_add_wind(Color(0.9, 1.0, 1.0), cyan, {"r0": 0.03, "width": 0.3, "lines": 5.0, "speed": 26.0,
+		"twist": -2.0, "gap": 1.3, "fill": 0.5, "line": 0.03, "gain": 1.6})
+	# Stars carried along in it.
+	var stars := _sparks([Color(1, 1, 1, 1), Color(0.8, 0.95, 1.0, 1.0), Color(1.0, 0.6, 1.0, 0.0)], 0.09, 1.0, int(40 * more))
+	stars.initial_velocity_min = 16.0
+	stars.initial_velocity_max = 22.0
+	_streams.append({"p": stars, "speed": 19.0, "spread": 0.6})
+	# Where it lands: cosmic fire and rolling shockwaves.
+	var nova := _toon(int(24 * more), false, {"col_core": Color(1.0, 0.95, 1.0), "col_mid": pink, "col_edge": violet,
+		"col_end": Color(0.15, 0.1, 0.35), "end_from": 0.7, "lump": 0.5, "erode": 1.0, "churn": 1.0, "gain": 1.3})
+	_spray(nova, 75.0, 2.5, 6.0, 1.5, 0.65)
+	nova.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": nova, "area": 0.4, "size": 0.5})
+	var sparkle := _sparks([Color(1, 1, 1, 1), Color(0.6, 1.0, 1.0, 0.9), Color(1.0, 0.5, 1.0, 0.0)], 0.07, 3.0, int(44 * more))
+	_spray(sparkle, 90.0, 4.0, 9.0, 1.0, 0.8)
+	sparkle.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	_impacts.append({"p": sparkle, "area": 0.4})
+	for k in 3:
+		_rings.append({"mi": _ring_mesh(), "period": 0.9, "offset": k / 3.0, "size": 1.9,
+			"color": [pink, cyan, violet][k] * Color(1, 1, 1, 0.55)})
+	_tip = _glow_tip(0.45, Color(0.85, 0.5, 1.0, 1.0))
+	_add_steam(int(12 * more), 0.7, 4.4)
+
+
+func _ring_mesh() -> MeshInstance3D:
+	## A flat ring (a shockwave), lying in its own xy plane: update() lays it on
+	## the ice, grows it and fades it out.
+	var mi := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var seg := 40
+	for i in seg:
+		var a0 := TAU * i / seg
+		var a1 := TAU * (i + 1) / seg
+		var o0 := Vector3(cos(a0), sin(a0), 0)
+		var o1 := Vector3(cos(a1), sin(a1), 0)
+		for v in [o0 * 0.84, o0, o1, o0 * 0.84, o1, o1 * 0.84]:
+			st.add_vertex(v)
+	mi.mesh = st.commit()
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.no_depth_test = true
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.top_level = true
+	mi.visible = false
+	add_child(mi)
+	return mi
 
 
 # =====================================================================================

@@ -42,7 +42,7 @@ func _clear_popups(world) -> void:
 
 func _run() -> void:
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	var player = world.player
@@ -95,5 +95,5 @@ func _run() -> void:
 	_place(player, Vector3(6.5, 3.0, 59.5), Vector3(4.0, 3.2, 54.0))
 	await _frames(10)
 	await _shot("fleet_crew")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	quit(0)

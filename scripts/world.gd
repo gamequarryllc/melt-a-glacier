@@ -29,6 +29,18 @@ const CHURCH_ROOF := 1.6
 const TOWER := [0, -12, 2, 2]              # in front of the nave
 const TOWER_TOP := 9.0                     # the spire on top pokes out of the ice
 const SPIRE := 3.8
+# Frozen Harbor's houses: red and ochre fishing cabins (rorbuer) with dark
+# roofs: walls, roof, shutters for house i.
+const RORBU = [
+	[Color(0.7, 0.16, 0.13), Color(0.22, 0.24, 0.27), Color(0.95, 0.93, 0.86)],
+	[Color(0.87, 0.64, 0.24), Color(0.3, 0.27, 0.25), Color(0.2, 0.36, 0.5)],
+	[Color(0.94, 0.93, 0.88), Color(0.24, 0.3, 0.38), Color(0.7, 0.16, 0.13)],
+	[Color(0.62, 0.14, 0.12), Color(0.28, 0.4, 0.26), Color(0.95, 0.93, 0.86)],
+	[Color(0.3, 0.45, 0.58), Color(0.22, 0.24, 0.27), Color(0.95, 0.93, 0.86)],
+]
+# The lighthouse, from the keeper's cottage corner (CHURCH): tower centre x, z,
+# radius, and the height of the gallery the lamp room stands on.
+const LIGHTHOUSE = [2.0, 6.0, 1.3, 17.0]
 const VILLAGERS = ["Grandma", "Grandpa", "Kid", "Woman", "Man", "Dog", "Cat", "Rooster"]   # meshes in characters.glb
 const FLOWERS = ["Daisy", "Tulip", "Cosmos", "Sunflower"]   # meshes in nature.glb
 
@@ -166,7 +178,7 @@ func _ready() -> void:
 		hud.toast("⚓ There's a ship frozen in here!"))
 	fleet.ship_freed.connect(func(n: String, bounty: float):
 		Sound.jingle("pirate_sting", -3.0, 2.5)
-		hud.toast("☠️ %s is free! The goblins pay you %s meltwater" % [n, Fmt.num(bounty)]))
+		hud.toast(Levels.story("ship_freed") % [n, Fmt.num(bounty)]))
 	Sound.indoors = false
 
 	get_window().size_changed.connect(_fit_render_scale)
@@ -469,7 +481,9 @@ const HINT_RADIUS := 2.8       # aiming at ice this close to a find gets you a h
 # How big each find model is (its longest side, in metres), in models/finds.glb
 # order (Find0, Find1...; see find_model).
 const FIND_SIZES := [0.6, 0.8, 0.7, 1.6, 2.6, 0.7, 1.3, 1.1, 0.8, 0.9, 0.8,
-	1.3, 2.6, 1.0, 5.0, 3.0, 2.6, 1.6]   # the lake glacier's finds: skater .. the sun's lost ray
+	1.3, 2.6, 1.0, 5.0, 3.0, 2.6, 1.6,   # the lake glacier's finds: skater .. the sun's lost ray
+	0.8, 1.0, 0.9, 0.9, 1.4, 1.0, 3.4, 2.0,   # Frozen Harbor's harbour glacier: duck .. golden anchor
+	0.9, 4.0, 1.6, 6.0, 2.4, 3.0]   # and its frozen bay: parrot .. a frozen comet
 
 
 static var _lake_model: ArrayMesh
@@ -963,10 +977,7 @@ func _build_fence() -> void:
 
 
 func _set_gate_sign(open: bool) -> void:
-	if open:
-		_gate_sign.text = "THE FROZEN LAKE\nThe gate's open.\nGo melt it!"
-	else:
-		_gate_sign.text = "🔒 THE FROZEN LAKE\nClosed until the\nvillage is free"
+	_gate_sign.text = Levels.story("gate_open" if open else "gate_closed")
 
 
 func _open_gate(animate: bool) -> void:
@@ -1066,6 +1077,14 @@ func _build_environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = Scenery.sky(int(level.seed))
+	var sky_mat := env.sky.sky_material as ShaderMaterial
+	sky_mat.set_shader_parameter("top_color", Levels.look("sky_top", Color(0.26, 0.5, 0.86)))
+	sky_mat.set_shader_parameter("horizon_color", Levels.look("sky_horizon", Color(0.74, 0.85, 0.96)))
+	sky_mat.set_shader_parameter("ground_color", Levels.look("sky_ground", Color(0.35, 0.4, 0.45)))
+	sky_mat.set_shader_parameter("cloud_light", Levels.look("cloud_light", Color(1.0, 1.0, 1.0)))
+	sky_mat.set_shader_parameter("cloud_shade", Levels.look("cloud_shade", Color(0.7, 0.76, 0.86)))
+	sky_mat.set_shader_parameter("cover", Levels.look("cover", 0.42))
+	sky_mat.set_shader_parameter("aurora", Levels.look("aurora", 0.0))
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
@@ -1074,9 +1093,9 @@ func _build_environment() -> void:
 	env.ambient_light_energy = 0.65   # with a slightly softer sun: gentler shade on a phone screen
 	# A quarter of the fill light is neutral, so shade isn't deep blue.
 	env.ambient_light_sky_contribution = 0.75
-	env.ambient_light_color = Color(0.62, 0.64, 0.68)
+	env.ambient_light_color = Levels.look("ambient", Color(0.62, 0.64, 0.68))
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.74, 0.84, 0.95)
+	env.fog_light_color = Levels.look("fog", Color(0.74, 0.84, 0.95))
 	env.fog_density = 0.0035
 	env.fog_sky_affect = 0.0
 	var we := WorldEnvironment.new()
@@ -1086,9 +1105,9 @@ func _build_environment() -> void:
 	# Low afternoon sun from the right, so the glacier's shape reads in light
 	# and shadow (from straight behind the camera everything looks flat).
 	var sun := DirectionalLight3D.new()
-	sun.transform.basis = Basis.looking_at(Vector3(-0.58, -0.6, -0.55).normalized(), Vector3.UP)
-	sun.light_energy = 0.85
-	sun.light_color = Color(1.0, 0.95, 0.88)
+	sun.transform.basis = Basis.looking_at((Levels.look("sun_dir", Vector3(-0.58, -0.6, -0.55)) as Vector3).normalized(), Vector3.UP)
+	sun.light_energy = Levels.look("sun_energy", 0.85)
+	sun.light_color = Levels.look("sun_color", Color(1.0, 0.95, 0.88))
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 70.0
@@ -1106,6 +1125,8 @@ func _build_ground() -> void:
 	# The meltwater lake past the glacier's tongue, and the river that feeds it.
 	_lake_water = Scenery.lake(level)
 	_water_mat = _lake_water.material_override
+	(_water_mat as ShaderMaterial).set_shader_parameter("shallow_color", Levels.look("water_shallow", Color(0.3, 0.68, 0.72)))
+	(_water_mat as ShaderMaterial).set_shader_parameter("deep_color", Levels.look("water_deep", Color(0.07, 0.38, 0.55)))
 	add_child(_lake_water)
 	var stream := Scenery.stream(level)
 	if stream != null:
@@ -1159,16 +1180,23 @@ func _build_village() -> Array:
 	## The buildings are Blender models (art/blender/build_village.py); house i
 	## is models/house_i.glb, made to fit HOUSES[i]'s footprint.
 	var carve: Array = []
+	var harbor := str(level.get("town", "")) == "harbor"
 	for i in HOUSES.size():
 		var hdef: Array = HOUSES[i]
 		var x := float(hdef[0])
 		var z := float(hdef[1])
 		var w := float(hdef[2])
 		var d := float(hdef[3])
-		_model("house_%d" % i, Vector3(x + w * 0.5, 0.0, z + d * 0.5))
+		var house := _model("house_%d" % i, Vector3(x + w * 0.5, 0.0, z + d * 0.5))
+		if harbor:
+			_recolor(house, {"plaster%d" % i: RORBU[i][0], "roof%d" % i: RORBU[i][1],
+				"shutter": RORBU[i][2], "shutter_dark": RORBU[i][2].darkened(0.25)})
 		var box := AABB(Vector3(x, 0, z), Vector3(w, HOUSE_WALL + HOUSE_ROOF, d))
 		carve.append(box)
 		solids.append(box)
+	if harbor:
+		_build_lighthouse(carve)
+		return carve
 	# The church, with an onion-dome steeple tall enough to poke out of the top
 	# of the glacier. The model's origin is the nave's footprint corner.
 	var cx := float(CHURCH[0])
@@ -1191,6 +1219,44 @@ func _build_village() -> Array:
 	_model("well", Vector3(1.5, 0.0, -19.5))
 	solids.append(AABB(Vector3(0.8, 0, -20.2), Vector3(1.4, 0.9, 1.4)))
 	return carve
+
+
+func _build_lighthouse(carve: Array) -> void:
+	## Frozen Harbor: a lighthouse and the keeper's cottage where the valley's
+	## church stands, tall enough that its lamp pokes out of the glacier (the
+	## harbour's taller ice), and a stack of lobster pots in the square.
+	var cx := float(CHURCH[0])
+	var cz := float(CHURCH[1])
+	var lh := Models.baked_instance(Models.baked("harbor", "Lighthouse"))
+	lh.position = Vector3(cx, 0.0, cz)
+	add_child(lh)
+	var cottage := AABB(Vector3(cx, 0, cz), Vector3(float(CHURCH[2]), CHURCH_WALL + CHURCH_ROOF, float(CHURCH[3])))
+	carve.append(cottage)
+	solids.append(cottage)
+	var c := Vector2(cx + LIGHTHOUSE[0], cz + LIGHTHOUSE[1])
+	var r: float = LIGHTHOUSE[2]
+	var tower := AABB(Vector3(c.x - r, 0, c.y - r), Vector3(2.0 * r, LIGHTHOUSE[3], 2.0 * r))
+	carve.append(tower)
+	solids.append(tower)
+	solids.append(AABB(Vector3(c.x - 1.0, LIGHTHOUSE[3], c.y - 1.0), Vector3(2.0, 2.6, 2.0)))
+	var pots := Models.baked_instance(Models.baked("harbor", "Pots"))
+	pots.position = Vector3(1.5, 0.0, -19.5)
+	add_child(pots)
+	solids.append(AABB(Vector3(0.8, 0, -20.2), Vector3(1.4, 1.0, 1.4)))
+
+
+static func _recolor(n: Node, colors: Dictionary) -> void:
+	## Paints the parts of a Blender model whose material is named in `colors`.
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		for s in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(s) as BaseMaterial3D
+			if m != null and colors.has(m.resource_name):
+				var c := m.duplicate() as BaseMaterial3D
+				c.albedo_color = colors[m.resource_name]
+				mi.set_surface_override_material(s, c)
+	for k in n.get_children():
+		_recolor(k, colors)
 
 
 func _build_fleet() -> void:

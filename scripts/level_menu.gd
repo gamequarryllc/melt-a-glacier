@@ -64,7 +64,7 @@ func _build() -> void:
 	title.text = "Where to next?"
 	titles.add_child(title)
 	var sub := _ink(19, INK_SOFT)
-	sub.text = "More glaciers are on their way. Here's what's coming!"
+	sub.text = "Each glacier is bigger, harder and sillier than the last. More are on their way!"
 	titles.add_child(sub)
 	var back := Button.new()
 	back.text = "Back"
@@ -105,10 +105,14 @@ func _card(i: int) -> Control:
 	## A postcard for one map: its picture, name and a line about it. The valley
 	## has a button to melt it again; the others get a COMING SOON stamp.
 	var m: Dictionary = Levels.MAPS[i]
-	var ready: bool = m.get("ready", false)
+	var key := str(m.get("key", ""))
+	var built: bool = m.get("ready", false)
+	var unlocked := built and (not m.has("after") or GameState.maps_won.has(str(m.after)) or GameState.maps_won.has(key))
+	var here := key == GameState.map
+	var won := GameState.maps_won.has(key)
 	var card := PanelContainer.new()
 	card.custom_minimum_size = CARD_SIZE
-	card.add_theme_stylebox_override("panel", _paper(CARD_PAPER if ready else CARD_LATER, 3, 3, 12))
+	card.add_theme_stylebox_override("panel", _paper(CARD_PAPER if unlocked else CARD_LATER, 3, 3, 12))
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 2)
@@ -117,10 +121,10 @@ func _card(i: int) -> Control:
 	var icon := _ink(40)
 	icon.text = str(m.icon)
 	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if not ready:
+	if not unlocked:
 		icon.modulate = Color(1, 1, 1, 0.6)   # still frozen over
 	v.add_child(icon)
-	var name := _ink(21, BROWN if ready else INK_SOFT)
+	var name := _ink(21, BROWN if unlocked else INK_SOFT)
 	name.add_theme_font_override("font", UiTheme.display_font())
 	name.text = str(m.name)
 	name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -132,39 +136,58 @@ func _card(i: int) -> Control:
 	blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	blurb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(blurb)
-	if ready:
+	if unlocked:
 		var done := _ink(16, GREEN)
-		done.text = ("Melted in %s" % Fmt.duration(GameState.play_time)) if GameState.has_won else "You are here"
+		if here and GameState.has_won:
+			done.text = "Melted in %s" % Fmt.duration(GameState.play_time)
+		elif here:
+			done.text = "You are here"
+		elif won:
+			done.text = "Melted!"
+		else:
+			done.text = "Ready to melt!"
+			done.add_theme_color_override("font_color", ORANGE.darkened(0.2))
 		done.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		v.add_child(done)
 		var again := Button.new()
 		again.name = "Play"
-		again.text = "Melt it again" if GameState.has_won else "Start over"
+		if here:
+			again.text = "Melt it again" if GameState.has_won else "Start over"
+		else:
+			again.text = "Melt it again" if won else "Let's go!"
 		again.custom_minimum_size = Vector2(0, 48)
 		again.add_theme_font_size_override("font_size", 20)
 		UiTheme.colored_button(again, ORANGE)
-		again.pressed.connect(_play)
+		again.pressed.connect(_play.bind(key))
 		v.add_child(again)
 		card.gui_input.connect(func(e: InputEvent):
 			if _is_tap(e):
-				_note.text = "%s: melt it all again, from a fresh glacier." % m.name)
+				_note.text = ("%s: melt it all again, from a fresh glacier." % m.name) if here or won \
+					else "%s: a fresh glacier. Your purchases come with you." % m.name)
 	else:
-		var stamp := _stamp(i)
+		var stamp := _stamp(i, "MELT %s FIRST" % _map_name(str(m.after)).to_upper() if built else "COMING SOON")
 		v.add_child(stamp)
 		card.gui_input.connect(func(e: InputEvent):
 			if _is_tap(e):
-				_note.text = "%s is still freezing over. Coming soon!" % m.name
+				if built:
+					_note.text = "%s opens up when you've melted the %s." % [m.name, _map_name(str(m.after))]
+				else:
+					_note.text = "%s is still freezing over. Coming soon!" % m.name
 				_thump(stamp.get_child(0) as Control))
 	return card
 
 
-func _play() -> void:
-	## Melt the valley again from a fresh glacier (purchases are kept).
-	GameState.wipe_save()
+static func _map_name(key: String) -> String:
+	return str(Levels.MAPS[Levels.map_index(key)].name)
+
+
+func _play(key: String) -> void:
+	## Start that map from a fresh glacier (purchases are kept).
+	GameState.wipe_save(key)
 	get_tree().reload_current_scene()
 
 
-func _stamp(i: int) -> Control:
+func _stamp(i: int, text: String = "COMING SOON") -> Control:
 	## A red rubber stamp, put on a bit crooked. (It sits in a plain Control, not
 	## a container: containers straighten their children out.)
 	var holder := Control.new()
@@ -184,9 +207,9 @@ func _stamp(i: int) -> Control:
 	stamp.add_theme_stylebox_override("panel", sb)
 	stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var l := Label.new()
-	l.text = "COMING SOON"
+	l.text = text
 	l.add_theme_font_override("font", UiTheme.display_font())
-	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_font_size_override("font_size", 24 if text.length() < 14 else 16)
 	l.add_theme_color_override("font_color", Color(STAMP_RED, 0.9))
 	stamp.add_child(l)
 	stamp.set_anchors_and_offsets_preset(Control.PRESET_CENTER)

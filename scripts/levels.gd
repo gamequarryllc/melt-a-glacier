@@ -1,7 +1,8 @@
 class_name Levels
 extends RefCounted
 ## Level descriptions: the shape of each glacier and what's frozen inside it.
-## There's one valley for now. A new level is a new dictionary like VALLEY.
+## A map is a dictionary like VALLEY (Frozen Harbor is VALLEY with HARBOR_CHANGES).
+## Balance.map says which one is being played.
 ##
 ## A level has one or more glaciers, melted in order: when one is gone, the
 ## next one opens up (the valley's village glacier, then the frozen lake).
@@ -120,18 +121,146 @@ const VALLEY := {
 }
 
 
+# Frozen Harbor: the same shape of valley (a fjord now, with the sea where
+# the lake was), but the ice is taller and much harder, a fishing town is
+# frozen under it with its lighthouse poking out of the top, and the whole
+# bay froze solid with the fishing fleet in it. It's built from VALLEY with
+# these changes (see harbor()).
+const HARBOR_CHANGES := {
+	"name": "Frozen Harbor",
+	"seed": 20261202,
+	"town": "harbor",
+	"glaciers": [
+		{
+			"name": "the harbour glacier",
+			"title": "Harbour glacier",
+			"field_max": Vector3(19.5, 17.5, 5.5),
+			"res": 0.75,                # the harbour's tools are big: a coarser grid keeps phones quick
+			"height": 16.0,             # a third taller than the village glacier
+			"half_width_back": 17.0,
+			"half_width_snout": 14.0,
+			"snout_z": 5.0,
+			"bumps": 0.8,
+			"layers": "harbor",
+			"layer_depth": 1.6,
+			"crevasses": [
+				{"z": -24.0, "bow": -1.4, "depth": 3.6, "width": 0.6, "x0": -12.0, "x1": 10.0},
+				{"z": -9.0, "bow": 1.8, "depth": 3.0, "width": 0.55, "x0": -14.0, "x1": -1.0},
+				{"z": -4.5, "bow": 1.4, "depth": 2.6, "width": 0.5, "x0": 3.0, "x1": 14.0},
+			],
+		},
+		{
+			"name": "the frozen bay",
+			"title": "Frozen bay",
+			"field_max": Vector3(66.0, 23.0, 103.0),
+			"height": 20.0,
+			"hills": 3.0,
+			"layers": "bay",
+			"layer_depth": 2.0,
+			"worth": 2.0,
+			"crevasses": [
+				{"z": 48.0, "bow": -2.5, "depth": 4.5, "width": 1.3, "x0": -30.0, "x1": 4.0},
+				{"z": 64.0, "bow": 3.0, "depth": 4.0, "width": 1.2, "x0": 8.0, "x1": 40.0},
+				{"z": 82.0, "bow": -2.0, "depth": 3.5, "width": 1.0, "x0": -24.0, "x1": 12.0},
+			],
+			# The fishing fleet, frozen mid-catch (PirateFleet.HULLS).
+			"ships": [
+				{"name": "The Salty Herring", "mesh": "Trawler", "pos": Vector3(-3.0, 0.0, 52.0), "yaw": 0.0,
+					"bounty": 3500000000.0},
+				{"name": "The Lucky Cod", "mesh": "Skiff", "pos": Vector3(-27.0, 0.0, 66.0), "yaw": PI,
+					"bounty": 900000000.0},
+				{"name": "The Wobbly Whelk", "mesh": "Skiff", "pos": Vector3(25.0, 0.0, 58.0), "yaw": 0.0,
+					"bounty": 1800000000.0},
+				{"name": "The Big Kipper", "mesh": "Trawler", "pos": Vector3(14.0, 0.0, 80.0), "yaw": PI,
+					"bounty": 6600000000.0},
+			],
+		},
+	],
+	"valley": {"snow_line": 12.0, "tree_line": 8.0},
+	# How it looks: an arctic evening with the northern lights out.
+	"look": {
+		"sky_top": Color(0.13, 0.2, 0.42), "sky_horizon": Color(0.98, 0.74, 0.6), "sky_ground": Color(0.3, 0.32, 0.42),
+		"cloud_light": Color(1.0, 0.86, 0.8), "cloud_shade": Color(0.58, 0.55, 0.72), "cover": 0.3, "aurora": 1.0,
+		"sun_color": Color(1.0, 0.84, 0.7), "sun_energy": 0.8, "sun_dir": Vector3(-0.7, -0.42, -0.55),
+		"fog": Color(0.8, 0.76, 0.86), "ambient": Color(0.6, 0.6, 0.7),
+		"water_shallow": Color(0.2, 0.55, 0.62), "water_deep": Color(0.04, 0.22, 0.4),
+	},
+	# What the signs and pop-ups say.
+	"story": {
+		"gate_closed": "🔒 THE FROZEN BAY\nClosed until the\nharbour is free",
+		"gate_open": "THE FROZEN BAY\nThe gate's open.\nGo melt it!",
+		"stage_title": "The harbour is free!",
+		"stage_body": "The fishermen are back on the quay, and your helpers are off for a well-earned fish supper.\n\nBut look past the fence. The whole bay froze solid, with the fleet still in it, and the gate is open now.\nHire a new crew at the shed and go melt %s!",
+		"stage_button": "To the bay!",
+		"ending": "The last of the sea ice drifted away and the boats can sail again.\nThe harbour is open!",
+		"walk": "Walk around the harbour",
+		"ship_freed": "⚓ %s is free! The crew pays you %s meltwater",
+		"done_label": "The harbour is open!",
+	},
+}
+
+# The valley's own words, for maps that don't change them.
+const VALLEY_STORY := {
+	"gate_closed": "🔒 THE FROZEN LAKE\nClosed until the\nvillage is free",
+	"gate_open": "THE FROZEN LAKE\nThe gate's open.\nGo melt it!",
+	"stage_title": "The village is free!",
+	"stage_body": "Everyone's home again, and your helpers have earned a holiday: they're partying in the village square.\n\nBut look past the fence. The whole lake froze solid, and the gate is open now.\nHire a new crew at the shed and go melt %s!",
+	"stage_button": "To the lake!",
+	"ending": "The last chunk dripped away and the lake is free.\nSummer is back!",
+	"walk": "Walk around the village",
+	"ship_freed": "☠️ %s is free! The goblins pay you %s meltwater",
+	"done_label": "Summer is back!",
+}
+
+static var _harbor: Dictionary = {}
+
+
+static func harbor() -> Dictionary:
+	if _harbor.is_empty():
+		_harbor = VALLEY.duplicate(true)
+		for k in HARBOR_CHANGES:
+			if k == "glaciers":
+				continue
+			if k == "valley":
+				for vk in HARBOR_CHANGES.valley:
+					_harbor.valley[vk] = HARBOR_CHANGES.valley[vk]
+			else:
+				_harbor[k] = HARBOR_CHANGES[k]
+		for g in HARBOR_CHANGES.glaciers.size():
+			var spec: Dictionary = _harbor.glaciers[g]
+			spec.erase("ships")
+			for gk in HARBOR_CHANGES.glaciers[g]:
+				spec[gk] = HARBOR_CHANGES.glaciers[g][gk]
+	return _harbor
+
+
 static func current() -> Dictionary:
-	return VALLEY
+	return harbor() if Balance.map == "harbor" else VALLEY
+
+
+static func story(key: String) -> String:
+	return str(current().get("story", VALLEY_STORY).get(key, VALLEY_STORY[key]))
+
+
+static func look(key: String, fallback):
+	return current().get("look", {}).get(key, fallback)
+
+
+static func map_index(key: String) -> int:
+	for i in MAPS.size():
+		if str(MAPS[i].get("key", "")) == key:
+			return i
+	return 0
 
 
 ## Every map, in the order they come out. Only the first is built so far; the
 ## rest are on the level menu after the ending, stamped COMING SOON, to show
 ## what's on the way (LevelMenu). "ready" maps can be played.
 const MAPS := [
-	{"name": "Alpine Valley", "icon": "🏔️", "ready": true,
+	{"name": "Alpine Valley", "key": "valley", "icon": "🏔️", "ready": true,
 		"blurb": "A mountain village under a glacier, and a whole frozen lake behind it."},
-	{"name": "Frozen Harbor", "icon": "⚓",
-		"blurb": "A fishing town and its whole fleet, frozen mid-catch."},
+	{"name": "Frozen Harbor", "key": "harbor", "icon": "⚓", "ready": true, "after": "valley",
+		"blurb": "A fishing town and its whole fleet, frozen mid-catch. Bring your Orbital Mirror."},
 	{"name": "Arctic Research Base", "icon": "📡",
 		"blurb": "The scientists froze along with their experiments. Careful what you thaw."},
 	{"name": "Ice Cave City", "icon": "💎",

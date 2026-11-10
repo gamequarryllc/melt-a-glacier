@@ -37,6 +37,28 @@ const HULLS := {
 			["GoblinLookout", Vector3(-0.5, 1.4, 0.7), 0.5],
 		],
 	},
+	# Frozen Harbor's fishing fleet (models/harbor.glb, art/blender/build_harbor.py),
+	# crewed by fisherfolk from characters.glb. "aft" is the wheelhouse.
+	"Trawler": {
+		"file": "harbor", "crew_file": "characters",
+		"length": 15.0, "beam": 5.0, "deck": 1.8, "aft": 2.3, "aft_z": 2.2, "bowsprit": 8.0,
+		"masts": [-4.2],
+		"crew": [
+			["Man", Vector3(0.3, 1.8, -2.6), 0.2],
+			["Grandpa", Vector3(-1.2, 1.8, -5.2), -0.5],
+			["Woman", Vector3(1.4, 1.8, -0.4), 2.6],
+			["Dog", Vector3(-0.9, 1.8, 0.6), 0.9],
+		],
+	},
+	"Skiff": {
+		"file": "harbor", "crew_file": "characters",
+		"length": 8.0, "beam": 3.0, "deck": 1.0, "aft": 1.5, "aft_z": 1.0, "bowsprit": 4.4,
+		"masts": [-1.6],
+		"crew": [
+			["Kid", Vector3(0.4, 1.0, -2.2), 0.3],
+			["Grandma", Vector3(-0.5, 1.0, -0.6), -0.4],
+		],
+	},
 }
 const HEADROOM := 2.4          # air left above the top deck inside the ice
 const SPOT_FRACTION := 0.8     # this much of the ice round a ship left: "there's a ship in here!"
@@ -69,14 +91,14 @@ func _add_ship(def: Dictionary, g: int) -> void:
 	node.position = def.pos
 	node.rotation.y = float(def.yaw)
 	add_child(node)
-	node.add_child(Models.baked_instance(Models.baked("pirates", def.mesh)))
+	node.add_child(Models.baked_instance(Models.baked(str(hull.get("file", "pirates")), def.mesh)))
 	var crew: Array = []
 	for c in hull.crew:
 		var holder := Node3D.new()
 		holder.position = c[1]
 		holder.rotation.y = c[2]
 		node.add_child(holder)
-		var mi := Models.baked_instance(Models.baked("pirates", c[0]))
+		var mi := Models.baked_instance(Models.baked(str(hull.get("crew_file", "pirates")), c[0]))
 		mi.material_override = _frozen_mat
 		holder.add_child(mi)
 		crew.append(holder)

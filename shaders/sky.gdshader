@@ -10,6 +10,10 @@ uniform vec3 bounce_color : source_color = vec3(0.6, 0.53, 0.44);
 uniform vec3 cloud_light : source_color = vec3(1.0, 1.0, 1.0);
 uniform vec3 cloud_shade : source_color = vec3(0.7, 0.76, 0.86);
 uniform float cover = 0.42;
+// The northern lights (Frozen Harbor): ribbons of green with pink hems.
+uniform float aurora = 0.0;
+uniform vec3 aurora_color : source_color = vec3(0.35, 1.0, 0.6);
+uniform vec3 aurora_hem : source_color = vec3(1.0, 0.45, 0.78);
 uniform sampler2D clouds : filter_linear_mipmap, repeat_enable;
 uniform sampler2D puffs : filter_linear_mipmap, repeat_enable;
 
@@ -46,6 +50,30 @@ void sky() {
 		vec3 cloud = mix(cloud_light, cloud_shade, lit * 0.8);
 		cloud += LIGHT0_COLOR * pow(sun, 8.0) * 0.25 * (1.0 - lit);   // silver lining near the sun
 		col = mix(col, cloud, c * 0.92);
+	}
+	// The northern lights: a few curtains hanging across the sky, each a wavy
+	// ribbon with bright vertical rays, a green body and a pink hem along the
+	// bottom, drawn with hard-ish edges like the rest of the game.
+	if (aurora > 0.0 && h > 0.04 && !AT_CUBEMAP_PASS) {
+		float az = atan(d.x, -d.z);
+		float glow = 0.0;
+		float hem = 0.0;
+		for (int k = 0; k < 3; k++) {
+			float fk = float(k);
+			float wave = texture(clouds, vec2(az * 0.18 + fk * 0.37, 0.21 + fk * 0.13)).r;
+			float base = 0.16 + fk * 0.1 + (wave - 0.5) * 0.22;
+			float tall = 0.12 + 0.08 * fk;
+			float up = (h - base) / tall;
+			float band = smoothstep(0.0, 0.08, up) * smoothstep(1.0, 0.25, up);
+			float rays = texture(clouds, vec2(az * (0.9 + fk * 0.3), 0.6 + fk * 0.3)).r;
+			band *= 0.55 + 0.45 * smoothstep(0.4, 0.6, rays);
+			band *= smoothstep(-0.9, 0.2, sin(az * (1.3 + fk * 0.4) + fk * 2.0));   // gaps between curtains
+			glow = max(glow, band * (1.0 - fk * 0.2));
+			hem = max(hem, smoothstep(0.0, 0.06, up) * smoothstep(0.24, 0.1, up) * band);
+		}
+		glow = smoothstep(0.08, 0.5, glow);
+		vec3 a = mix(aurora_color, aurora_hem, smoothstep(0.3, 0.9, hem));
+		col = mix(col, a, glow * aurora * 0.55 * smoothstep(0.04, 0.2, h));
 	}
 	// The sun's disc, drawn over thin cloud.
 	if (LIGHT0_ENABLED && !AT_CUBEMAP_PASS) {

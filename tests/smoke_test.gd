@@ -53,7 +53,7 @@ func _aim_at(player, target: Vector3) -> void:
 
 func _run() -> void:
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	await _frames(3)
@@ -622,8 +622,9 @@ func _run() -> void:
 			if c.find_child("Stamp", true, false) != null:
 				soon += 1
 		check(menu.has_signal("closed") and menu.cards.size() == Levels.MAPS.size()
-			and menu.cards[0].find_child("Play", true, false) != null and soon == Levels.MAPS.size() - 1,
-			"a new glacier opens the level menu: the valley again, and %d coming soon" % soon)
+			and menu.cards[0].find_child("Play", true, false) != null and menu.cards[1].find_child("Play", true, false) != null
+			and soon == Levels.MAPS.size() - 2,
+			"a new glacier opens the level menu: the valley again, Frozen Harbor unlocked, and %d coming soon" % soon)
 		menu.close()
 		await _frames(2)
 		check(world.hud.popups.get_child_count() == 0 and player.input_enabled, "closing the level menu goes back to the valley")
@@ -640,7 +641,7 @@ func _run() -> void:
 		"glaciers stored in the save (%d KB)" % (str(gs.glacier_saves[1]).length() / 1024))
 
 	# --- Start over: a fresh valley.
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	world.queue_free()
 	await _frames(2)
 	var world2 = load("res://scenes/world.tscn").instantiate()
@@ -648,7 +649,34 @@ func _run() -> void:
 	await _frames(3)
 	check(gs.grid.remaining == gs.grid.total and not gs.has_won, "start over gives a full glacier")
 	await _frames(20)
-	gs.wipe_save()
+
+	# --- Frozen Harbor: the second map.
+	gs.wipe_save("harbor")
+	world2.queue_free()
+	await _frames(2)
+	var world3 = load("res://scenes/world.tscn").instantiate()
+	root.add_child(world3)
+	await _frames(3)
+	check(gs.map == "harbor" and gs.maps_won.has("valley"), "Frozen Harbor starts, and the valley stays won")
+	check(Balance.TOOLS[0].name == "Orbital Mirror" and gs.tool_index == 0 and Balance.TOOLS.size() == 6,
+		"the harbour starts with the Orbital Mirror, and 5 new tools to buy")
+	check(world3._find_markers.size() == Balance.DISCOVERIES.size() and Balance.DISCOVERIES.size() == 14,
+		"all %d harbour finds placed" % world3._find_markers.size())
+	check(world3.fleet.ships.size() == 4 and gs.grids.size() == 2 and gs.grids[0].layers[0].name == "Sea Snow",
+		"the harbour glacier, the frozen bay and its 4 fishing boats")
+	check(gs.helper_cost(0) > 1000.0 * float(Balance.BASE_HELPERS[0].base), "harbour prices are scaled up")
+	var p3 = gs.player
+	p3.position = Vector3(1.0, 0.0, 12.0)
+	p3.set_view(0.0, -0.2)
+	p3.unstick()
+	var before3: float = gs.grid.volume_left()
+	world3.force_melt = true
+	for tool_i in Balance.TOOLS.size():
+		gs.tool_index = tool_i
+		await _frames(25)
+	world3.force_melt = false
+	check(gs.grid.volume_left() < before3, "every harbour tool melts (%.0f m3 gone)" % (before3 - gs.grid.volume_left()))
+	gs.wipe_save("valley")
 	print("SMOKE TEST ", "PASSED" if ok else "FAILED")
 	quit(0 if ok else 1)
 

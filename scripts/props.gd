@@ -23,8 +23,9 @@ static func tool_mesh(i: int, golden: bool = false) -> ArrayMesh:
 	## Made in Blender (art/blender/build_tools.py). The parts in the "body"
 	## material take the tool's colour, or gold.
 	var t := clampi(i, 0, Balance.TOOLS.size() - 1)
-	var col: Color = GOLD if golden and t == 0 else Balance.TOOLS[t].color
-	return Models.baked("tools", "Tool%d" % t, {"body": col})
+	var model := str(Balance.TOOLS[t].get("model", "Tool%d" % t))
+	var col: Color = GOLD if golden and model == "Tool0" else Balance.TOOLS[t].color
+	return Models.baked("tools", model, {"body": col})
 
 
 static func upgrade_mesh(key: String) -> ArrayMesh:

@@ -72,7 +72,7 @@ static func eligible(kind: String) -> bool:
 	match kind:
 		"double_water":
 			var amount := GameState.double_water_amount()
-			return amount >= maxf(Balance.DOUBLE_WATER_MIN, GameState.income_per_minute())
+			return amount >= maxf(Balance.DOUBLE_WATER_MIN * Balance.scale, GameState.income_per_minute())
 		"heat_rush":
 			return not GameState.is_boost_active()
 		"helper_rush":

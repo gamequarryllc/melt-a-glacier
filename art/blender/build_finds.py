@@ -1,6 +1,7 @@
 """The things frozen in the glaciers (Balance.DISCOVERIES, in order): 11 in
 the village glacier, then 7 in the lake glacier. Writes models/finds.glb
-with one mesh per find, Find0..Find17, each standing
+with one mesh per find, Find0..Find17, then Frozen Harbor's 14
+(Find18..Find31: 8 in the harbour glacier, 6 in the frozen bay), each standing
 on y = 0 and facing -Z (toward you as you dig it out). The game scales and
 centres them (World._make_find_marker), so sizes here are only relative.
 """
@@ -532,11 +533,372 @@ def sun_ray():
     return o
 
 
+# ---- Frozen Harbor: Find18 .. Find31 (Balance.HARBOR_DISCOVERIES) ----
+
+def duck_captain():
+    o = []
+    yellow = m("duck_yellow", (1.0, 0.84, 0.15), 0.5)
+    orange = m("duck_orange", (1.0, 0.5, 0.1), 0.5)
+    eye = m("eye", INK, 0.3)
+    navy = m("cap_navy", (0.12, 0.16, 0.3), 0.7)
+    gold = m("gold", (1.0, 0.8, 0.25), 0.25, 0.9)
+    o.append(sphere((0, 0.22, 0.05), (0.26, 0.2, 0.3), yellow, 20, 12))
+    o.append(sphere((0, 0.3, 0.3), (0.08, 0.12, 0.08), yellow, 10, 6, basis=rot_x(-0.6)))   # tail
+    o.append(sphere((0, 0.5, -0.15), (0.17, 0.17, 0.17), yellow, 18, 12))
+    o.append(sphere((0, 0.46, -0.32), (0.09, 0.035, 0.08), orange, 12, 6))
+    for s in (-1, 1):
+        o.append(sphere((s * 0.08, 0.55, -0.29), (0.025, 0.03, 0.02), eye, 8, 5))
+        o.append(sphere((s * 0.2, 0.25, 0.05), (0.06, 0.12, 0.2), yellow, 10, 6, basis=rot_z(s * 0.3)))   # wings
+    # A captain's hat.
+    o.append(cyl((0, 0.63, -0.15), (0, 0.72, -0.15), 0.15, 0.17, m("cap_white", WHITE, 0.6), 18))
+    o.append(cyl((0, 0.62, -0.15), (0, 0.64, -0.15), 0.15, 0.15, navy, 18))
+    brim = cyl((0, 0.615, -0.25), (0, 0.63, -0.25), 0.12, 0.12, navy, 14)
+    deform(brim, lambda p: Vector((p.x, p.y, min(p.z, -0.2))))
+    o.append(brim)
+    o.append(box((0, 0.67, -0.32), (0.05, 0.05, 0.01), gold, None, 0.0))
+    return o
+
+
+def lobster():
+    o = []
+    red = m("lobster_red", (0.86, 0.22, 0.14), 0.5)
+    dark = m("lobster_dark", (0.6, 0.12, 0.08), 0.5)
+    eye = m("eye", INK, 0.3)
+    bow = m("bowtie", (0.08, 0.08, 0.1), 0.5)
+    # Standing up on its tail, waving its claws.
+    for k in range(5):
+        o.append(sphere((0, 0.08 + k * 0.1, 0.02 * k), (0.11 - k * 0.008, 0.07, 0.1 - k * 0.006), red if k % 2 else dark, 12, 6))
+    o.append(sphere((0, 0.04, 0.0), (0.18, 0.03, 0.12), dark, 10, 5))   # tail fan
+    o.append(sphere((0, 0.68, 0.05), (0.13, 0.18, 0.12), red, 14, 8))
+    for s in (-1, 1):
+        o.append(cyl((s * 0.1, 0.72, -0.02), (s * 0.24, 0.85, -0.08), 0.03, 0.03, red, 8))
+        o.append(sphere((s * 0.3, 0.95, -0.1), (0.09, 0.15, 0.06), red, 12, 6, basis=rot_z(s * 0.4)))
+        o.append(sphere((s * 0.36, 1.06, -0.1), (0.04, 0.08, 0.04), dark, 8, 5, basis=rot_z(s * 0.9)))
+        o.append(sphere((s * 0.05, 0.86, -0.06), (0.025, 0.025, 0.025), eye, 6, 4))
+        o.append(cyl((s * 0.03, 0.86, -0.08), (s * 0.25, 1.3, -0.2), 0.008, 0.004, dark, 4))
+        for k in range(3):
+            o.append(cyl((s * 0.09, 0.4 + k * 0.08, -0.02), (s * 0.22, 0.32 + k * 0.08, -0.06), 0.012, 0.01, dark, 5))
+        o.append(sphere((s * 0.06, 0.58, -0.11), (0.06, 0.04, 0.02), bow, 8, 5, basis=rot_z(s * 0.2)))
+    o.append(sphere((0, 0.58, -0.12), (0.025, 0.025, 0.02), bow, 6, 4))
+    return o
+
+
+def diving_helmet():
+    o = []
+    brass = m("brass", (0.86, 0.66, 0.27), 0.3, 0.85)
+    copper = m("copper", (0.78, 0.45, 0.25), 0.35, 0.85)
+    glass = m("porthole", (0.25, 0.35, 0.45), 0.1)
+    o.append(cyl((0, 0.0, 0), (0, 0.18, 0), 0.34, 0.3, copper, 22))
+    o.append(sphere((0, 0.48, 0), (0.3, 0.32, 0.3), brass, 22, 14))
+    for k in range(8):   # bolts round the collar
+        a = math.tau * k / 8
+        o.append(sphere((math.cos(a) * 0.32, 0.17, math.sin(a) * 0.32), (0.025, 0.025, 0.025), brass, 6, 4))
+    for (y, z, x, r) in ((0.48, -0.3, 0.0, 0.13), (0.48, 0.0, -0.3, 0.09), (0.48, 0.0, 0.3, 0.09), (0.7, -0.18, 0.0, 0.07)):
+        nrm = Vector((x, 0, z)).normalized() if (x or z) else Vector((0, 1, 0))
+        if y > 0.6:
+            nrm = Vector((0, 0.6, -0.8))
+        c = Vector((0, 0.48, 0)) + nrm * 0.29 if y < 0.6 else Vector((0, y, z))
+        o.append(cyl(c - nrm * 0.02, c + nrm * 0.04, r + 0.025, r + 0.025, brass, 16))
+        o.append(cyl(c + nrm * 0.03, c + nrm * 0.045, r, r, glass, 16))
+        for g in (-1, 1):   # grille bars over the front window
+            if z < -0.2:
+                o.append(box(c + nrm * 0.05 + Vector((g * 0.05, 0, 0)), (0.012, r * 2, 0.012), brass, None, 0.0))
+    o.append(cyl((0.2, 0.6, 0.2), (0.3, 0.75, 0.3), 0.04, 0.04, brass, 8))   # air valve
+    return o
+
+
+def treasure_map():
+    o = []
+    paper = m("parchment", (0.93, 0.84, 0.62), 0.9)
+    edge = m("parchment_edge", (0.75, 0.6, 0.38), 0.9)
+    ink = m("map_ink", (0.35, 0.22, 0.12), 0.8)
+    red = m("map_red", (0.8, 0.12, 0.1), 0.7)
+    sea = m("map_sea", (0.45, 0.65, 0.7), 0.8)
+    # A sheet standing up, leaning back a little, with a roll at the top and bottom.
+    tilt = rot_x(-0.2)
+    o.append(box((0, 0.4, 0), (0.7, 0.62, 0.012), paper, tilt, 0.0))
+    for y in (0.08, 0.72):
+        o.append(cyl((-0.37, y, 0.0), (0.37, y, 0.0), 0.04, 0.04, edge, 14))
+        transform(o[-1], None, (0, 0, (y - 0.4) * 0.2))
+    o.append(sphere((-0.12, 0.45, -0.02), (0.18, 0.12, 0.01), sea, 12, 6, basis=tilt))   # an island's sea
+    o.append(sphere((-0.1, 0.45, -0.025), (0.11, 0.07, 0.01), paper, 12, 6, basis=tilt))
+    for k in range(6):   # the dotted path
+        o.append(sphere((-0.05 + k * 0.05, 0.42 - k * 0.02 * (k % 2), -0.03), (0.012, 0.012, 0.004), ink, 4, 3))
+    for a in (0.785, -0.785):   # X marks the spot
+        o.append(box((0.22, 0.34, -0.03), (0.1, 0.022, 0.006), red, rot_z(a) @ tilt, 0.0))
+    o.append(box((0.2, 0.6, -0.025), (0.2, 0.015, 0.004), ink, tilt, 0.0))
+    o.append(box((0.24, 0.57, -0.025), (0.12, 0.015, 0.004), ink, tilt, 0.0))
+    return o
+
+
+def mermaid_guitar():
+    o = []
+    teal = m("guitar_teal", (0.2, 0.7, 0.68), 0.4)
+    pearl = m("pearl", (0.95, 0.9, 0.95), 0.2)
+    wood = m("neck_wood", (0.45, 0.28, 0.16), 0.7)
+    gold = m("gold", (1.0, 0.8, 0.25), 0.25, 0.9)
+    pink = m("starfish", (1.0, 0.5, 0.45), 0.7)
+    # Standing on its end, a scallop-shell body facing -Z.
+    body_ = cyl((0, 0.3, 0.03), (0, 0.3, -0.05), 0.26, 0.26, teal, 20)
+    deform(body_, lambda p: Vector((p.x * (1.0 + 0.2 * max(0.0, 0.3 - p.y)), p.y, p.z)))
+    o.append(body_)
+    for k in range(7):   # shell ridges
+        a = -1.2 + k * 0.4
+        o.append(box((math.sin(a) * 0.13, 0.3 + math.cos(a) * 0.13, -0.055), (0.025, 0.26, 0.012), pearl, rot_z(-a), 0.0))
+    o.append(cyl((0, 0.32, -0.056), (0, 0.32, -0.06), 0.06, 0.06, m("soundhole", (0.1, 0.15, 0.18), 0.6), 14))
+    o.append(box((0, 0.78, -0.01), (0.07, 0.5, 0.04), wood, None, 0.01))
+    o.append(box((0, 1.07, -0.01), (0.1, 0.12, 0.05), teal, None, 0.015))
+    for s in (-1, 1):
+        for k in range(3):
+            o.append(cyl((s * 0.05, 1.03 + k * 0.035, -0.01), (s * 0.08, 1.03 + k * 0.035, -0.01), 0.008, 0.008, gold, 5))
+    for k in range(4):
+        x = -0.03 + k * 0.02
+        o.append(cyl((x, 0.18, -0.06), (x, 1.02, -0.035), 0.002, 0.002, m("string", (0.9, 0.9, 0.85), 0.3, 0.6), 3))
+    for k in range(5):   # a starfish stuck on
+        a = math.tau * k / 5
+        o.append(cyl((0.15, 0.15, -0.06), (0.15 + math.cos(a) * 0.07, 0.15 + math.sin(a) * 0.07, -0.06), 0.022, 0.006, pink, 5))
+    return o
+
+
+def robot_seagull():
+    o = []
+    steel = m("robot_steel", (0.78, 0.8, 0.84), 0.3, 0.8)
+    dark = m("robot_dark", (0.3, 0.32, 0.36), 0.4, 0.6)
+    yellow = m("beak_yellow", (1.0, 0.75, 0.15), 0.4)
+    red = m("robot_eye", (1.0, 0.2, 0.15), 0.2, 0.0, (1.0, 0.15, 0.1))
+    chip = m("chip", (1.0, 0.85, 0.45), 0.8)
+    o.append(box((0, 0.42, 0.05), (0.26, 0.24, 0.44), steel, None, 0.05))
+    o.append(box((0, 0.62, -0.15), (0.2, 0.2, 0.2), steel, None, 0.04))
+    o.append(box((0, 0.6, -0.31), (0.07, 0.05, 0.14), yellow, None, 0.015))
+    o.append(box((0.03, 0.58, -0.39), (0.1, 0.02, 0.025), chip, rot_y(0.3), 0.004))   # a stolen chip
+    for s in (-1, 1):
+        o.append(sphere((s * 0.1, 0.66, -0.2), (0.025, 0.03, 0.03), red, 8, 5))
+        wing = box((s * 0.3, 0.5, 0.05), (0.38, 0.03, 0.26), dark, rot_z(s * 0.4), 0.01)
+        o.append(wing)
+        o.append(cyl((s * 0.07, 0.3, 0.05), (s * 0.07, 0.04, 0.03), 0.02, 0.02, dark, 6))
+        o.append(box((s * 0.07, 0.02, -0.02), (0.08, 0.02, 0.1), yellow, None, 0.005))
+        for k in range(3):   # rivets
+            o.append(sphere((s * 0.131, 0.42, -0.1 + k * 0.12), (0.012, 0.012, 0.012), dark, 4, 3))
+    o.append(cyl((0, 0.72, -0.12), (0, 0.9, -0.1), 0.008, 0.008, dark, 4))
+    o.append(sphere((0, 0.9, -0.1), (0.025, 0.025, 0.025), red, 6, 4))
+    o.append(box((0, 0.42, 0.33), (0.18, 0.05, 0.14), dark, rot_x(0.3), 0.01))   # tail
+    return o
+
+
+def narwhal():
+    o = []
+    grey = m("narwhal_grey", (0.55, 0.62, 0.7), 0.6)
+    belly = m("narwhal_belly", (0.88, 0.9, 0.92), 0.6)
+    spots = m("narwhal_spots", (0.38, 0.44, 0.52), 0.6)
+    tusk = m("tusk", (0.96, 0.93, 0.82), 0.4)
+    eye = m("eye", INK, 0.3)
+    # Swimming toward -X, tusk forward.
+    o.append(sphere((0, 0.4, 0), (0.9, 0.38, 0.38), grey, 22, 12))
+    o.append(sphere((-0.1, 0.28, 0), (0.8, 0.22, 0.3), belly, 18, 8))
+    tail = sphere((0.9, 0.45, 0), (0.4, 0.14, 0.14), grey, 12, 6)
+    o.append(tail)
+    for s in (-1, 1):
+        o.append(sphere((1.3, 0.5, 0.2 * s), (0.18, 0.04, 0.24), grey, 10, 5, basis=rot_y(0.5 * s)))
+        o.append(sphere((-0.4, 0.22, 0.34 * s), (0.2, 0.04, 0.1), grey, 8, 4, basis=rot_y(-0.5 * s)))
+    o.append(sphere((-0.65, 0.5, -0.3), (0.04, 0.045, 0.03), eye, 8, 5))
+    import random as _r
+    rng = _r.Random(5)
+    for k in range(10):
+        x = rng.uniform(-0.5, 0.7)
+        o.append(sphere((x, 0.62 + rng.uniform(-0.05, 0.08), rng.uniform(-0.25, 0.25)), (0.05, 0.02, 0.04), spots, 6, 3))
+    # The spiral tusk.
+    o.append(cyl((-0.85, 0.48, 0), (-1.85, 0.62, 0), 0.05, 0.008, tusk, 10))
+    for k in range(9):
+        t = k / 9
+        p = Vector((-0.88 - t * 0.95, 0.48 + t * 0.13, 0))
+        o.append(torus(p, 0.045 * (1 - t) + 0.01, 0.008, tusk, 10, 4))
+        transform(o[-1], None, (0, 0, 0))
+    return o
+
+
+def golden_anchor():
+    o = []
+    gold = m("gold", (1.0, 0.8, 0.25), 0.25, 0.9)
+    rope = m("rope", (0.75, 0.62, 0.4), 0.9)
+    o.append(cyl((0, 0.15, 0), (0, 1.05, 0), 0.05, 0.05, gold, 12))
+    ring = torus((0, 0, 0), 0.1, 0.025, gold, 16, 6)
+    transform(ring, rot_x(math.pi / 2), (0, 1.16, 0))
+    o.append(ring)
+    o.append(cyl((-0.3, 0.9, 0), (0.3, 0.9, 0), 0.035, 0.035, gold, 10))   # stock
+    for s in (-1, 1):
+        o.append(sphere((s * 0.32, 0.9, 0), (0.05, 0.05, 0.05), gold, 8, 5))
+    # The curved arms with pointed flukes.
+    prev = Vector((-0.42, 0.42, 0))
+    for k in range(1, 13):
+        a = math.pi * (1.0 + k / 12)
+        p = Vector((math.cos(a) * -0.42, 0.42 + math.sin(a) * 0.36, 0))
+        o.append(cyl(prev, p, 0.045, 0.045, gold, 8))
+        prev = p
+    for s in (-1, 1):
+        o.append(cyl((s * 0.42, 0.42, 0), (s * 0.5, 0.62, 0), 0.1, 0.0, gold, 4))
+    o.append(sphere((0, 0.08, 0), (0.08, 0.08, 0.06), gold, 10, 6))
+    # Rope looped round the shank.
+    for k in range(4):
+        tr = torus((0, 0, 0), 0.07, 0.02, rope, 12, 5)
+        transform(tr, rot_z(0.3), (0, 0.98 - k * 0.05, 0))
+        o.append(tr)
+    return o
+
+
+def parrot():
+    o = []
+    green = m("parrot_green", (0.2, 0.7, 0.25), 0.6)
+    red = m("parrot_red", (0.9, 0.18, 0.15), 0.6)
+    blue = m("parrot_blue", (0.2, 0.4, 0.85), 0.6)
+    beak = m("beak", (0.95, 0.85, 0.5), 0.4)
+    eye = m("eye", INK, 0.3)
+    hat = m("tricorn", (0.12, 0.1, 0.1), 0.7)
+    wood = m("perch_wood", (0.45, 0.3, 0.18), 0.8)
+    o.append(cyl((-0.3, 0.05, 0), (0.3, 0.05, 0), 0.035, 0.035, wood, 8))
+    o.append(sphere((0, 0.35, 0), (0.15, 0.24, 0.15), green, 16, 10))
+    o.append(sphere((0, 0.62, -0.03), (0.13, 0.13, 0.13), red, 14, 9))
+    o.append(sphere((0, 0.58, -0.17), (0.05, 0.06, 0.06), beak, 8, 5, basis=rot_x(0.5)))
+    for s in (-1, 1):
+        o.append(sphere((s * 0.14, 0.34, 0.03), (0.05, 0.2, 0.12), blue, 10, 6, basis=rot_z(s * 0.15)))
+        o.append(cyl((s * 0.05, 0.12, 0), (s * 0.05, 0.06, -0.02), 0.012, 0.012, beak, 5))
+    o.append(sphere((-0.07, 0.66, -0.12), (0.025, 0.025, 0.02), eye, 6, 4))
+    o.append(box((0.07, 0.66, -0.12), (0.06, 0.05, 0.01), hat, None, 0.0))   # eyepatch
+    o.append(box((0.0, 0.68, -0.08), (0.2, 0.012, 0.01), hat, rot_z(-0.5), 0.0))
+    o.append(sphere((0, 0.15, 0.18), (0.05, 0.22, 0.04), blue, 8, 5, basis=rot_x(0.5)))   # tail
+    o.append(cyl((0, 0.73, -0.03), (0, 0.8, -0.03), 0.12, 0.08, hat, 3))   # tricorn
+    o.append(sphere((0, 0.82, -0.03), (0.06, 0.03, 0.06), m("skull_white", WHITE, 0.6), 6, 4))
+    return o
+
+
+def submarine():
+    o = []
+    yellow = m("sub_yellow", (1.0, 0.82, 0.15), 0.4)
+    dark = m("sub_dark", (0.3, 0.3, 0.33), 0.4, 0.6)
+    glass = m("porthole", (0.25, 0.35, 0.45), 0.1)
+    brass = m("brass", (0.86, 0.66, 0.27), 0.3, 0.85)
+    # Bow toward -X.
+    o.append(sphere((0, 0.45, 0), (1.0, 0.38, 0.38), yellow, 22, 12))
+    o.append(box((0.1, 0.9, 0), (0.45, 0.3, 0.26), yellow, None, 0.08))
+    o.append(cyl((0.0, 1.05, 0), (0.0, 1.35, 0), 0.03, 0.03, dark, 8))
+    o.append(cyl((0.0, 1.35, 0), (-0.12, 1.35, 0), 0.03, 0.03, dark, 8))
+    for k in range(3):
+        x = -0.5 + k * 0.35
+        o.append(cyl((x, 0.5, -0.35), (x, 0.5, -0.39), 0.08, 0.08, brass, 14))
+        o.append(cyl((x, 0.5, -0.39), (x, 0.5, -0.4), 0.06, 0.06, glass, 14))
+    o.append(cyl((1.0, 0.45, 0), (1.1, 0.45, 0), 0.08, 0.06, dark, 10))
+    for k in range(3):
+        a = math.tau * k / 3
+        o.append(box((1.12, 0.45 + math.cos(a) * 0.12, math.sin(a) * 0.12), (0.03, 0.2, 0.08), brass, rot_x(a), 0.01))
+    for s in (-1, 1):
+        o.append(box((0.75, 0.45, s * 0.35), (0.25, 0.03, 0.2), yellow, None, 0.01))
+    return o
+
+
+def giant_pearl():
+    o = []
+    shell = m("oyster_shell", (0.55, 0.5, 0.52), 0.8)
+    inside = m("oyster_inside", (0.92, 0.82, 0.86), 0.3)
+    pearl = m("pearl_glow", (1.0, 0.95, 1.0), 0.15, 0.0, (0.6, 0.55, 0.65))
+    o.append(sphere((0, 0.08, 0), (0.6, 0.12, 0.45), shell, 20, 8))
+    o.append(sphere((0, 0.15, 0), (0.52, 0.05, 0.38), inside, 18, 6))
+    top = sphere((0, 0, 0), (0.6, 0.1, 0.45), shell, 20, 8)
+    transform(top, rot_x(-1.05), (0, 0.18, 0.4))
+    o.append(top)
+    lip = sphere((0, 0, 0), (0.52, 0.04, 0.38), inside, 18, 6)
+    transform(lip, rot_x(-1.05), (0, 0.18, 0.36))
+    o.append(lip)
+    for k in range(7):   # ridges on the lid's back
+        a = -0.9 + k * 0.3
+        r = box((math.sin(a) * 0.3, 0.0, 0.0), (0.03, 0.025, 0.5), shell, rot_y(a), 0.0)
+        transform(r, rot_x(-1.05), (0, 0.22, 0.43))
+        o.append(r)
+    o.append(sphere((0, 0.33, -0.02), (0.2, 0.2, 0.2), pearl, 20, 14))
+    return o
+
+
+def kraken():
+    o = []
+    purple = m("kraken_purple", (0.55, 0.25, 0.6), 0.6)
+    pink = m("kraken_suckers", (0.95, 0.6, 0.75), 0.6)
+    eye_w = m("kraken_eye", (1.0, 0.85, 0.3), 0.3)
+    eye = m("eye", INK, 0.3)
+    o.append(sphere((0, 1.2, 0.1), (0.75, 1.0, 0.7), purple, 22, 14))
+    o.append(sphere((0, 0.45, 0), (0.6, 0.35, 0.6), purple, 18, 10))
+    for s in (-1, 1):
+        o.append(sphere((s * 0.3, 0.75, -0.48), (0.17, 0.2, 0.1), eye_w, 12, 8))
+        o.append(sphere((s * 0.3, 0.75, -0.56), (0.04, 0.13, 0.04), eye, 8, 6))
+    # Eight arms curling out, all waving.
+    for k in range(8):
+        a = math.tau * k / 8 + 0.2
+        prev = Vector((math.cos(a) * 0.4, 0.3, math.sin(a) * 0.4))
+        for j in range(1, 12):
+            t = j / 11
+            r = 0.4 + t * 1.6
+            up = math.sin(t * math.pi) * 0.6 + (0.9 * t * t if k % 2 == 0 else 0.0)
+            p = Vector((math.cos(a + t * 0.8) * r, 0.18 + up, math.sin(a + t * 0.8) * r))
+            o.append(cyl(prev, p, 0.17 * (1 - t) + 0.03, 0.17 * (1 - t * 0.95) + 0.02, purple, 8))
+            if j % 2 == 0:
+                o.append(sphere(p + Vector((0, -0.12 * (1 - t), 0)), (0.05 * (1 - t) + 0.015,) * 3, pink, 6, 4))
+            prev = p
+    return o
+
+
+def mermaid_throne():
+    o = []
+    coral = m("coral", (1.0, 0.45, 0.4), 0.7)
+    pearl = m("pearl", (0.95, 0.9, 0.95), 0.2)
+    shell = m("throne_shell", (0.98, 0.78, 0.7), 0.5)
+    teal = m("cushion_teal", (0.15, 0.6, 0.65), 0.8)
+    gold = m("gold", (1.0, 0.8, 0.25), 0.25, 0.9)
+    o.append(cyl((0, 0, 0), (0, 0.25, 0), 0.5, 0.45, pearl, 20))
+    o.append(box((0, 0.35, 0), (0.7, 0.2, 0.55), shell, None, 0.06))
+    o.append(box((0, 0.48, -0.02), (0.6, 0.08, 0.45), teal, None, 0.04))
+    # The back: a giant scallop fanning up behind.
+    for k in range(9):
+        a = -1.1 + k * 0.275
+        rib = box((math.sin(a) * 0.4, 0.5 + math.cos(a) * 0.45, 0.25), (0.18, 0.9, 0.05), shell if k % 2 else coral, rot_z(-a), 0.03)
+        o.append(rib)
+    o.append(sphere((0, 1.38, 0.24), (0.1, 0.1, 0.1), pearl, 12, 8))
+    for s in (-1, 1):   # coral armrests
+        o.append(cyl((s * 0.35, 0.45, -0.1), (s * 0.42, 0.75, -0.15), 0.05, 0.03, coral, 6))
+        o.append(cyl((s * 0.4, 0.65, -0.13), (s * 0.52, 0.8, -0.1), 0.03, 0.015, coral, 6))
+    # A trident leaning on it.
+    o.append(cyl((0.55, 0.0, -0.3), (0.7, 1.5, -0.2), 0.02, 0.02, gold, 6))
+    for k in (-1, 0, 1):
+        o.append(cyl((0.7 + k * 0.08, 1.45, -0.2), (0.72 + k * 0.1, 1.7, -0.2), 0.015, 0.0, gold, 5))
+    o.append(box((0.7, 1.45, -0.2), (0.24, 0.03, 0.03), gold, rot_z(0.1), 0.0))
+    return o
+
+
+def comet():
+    o = []
+    ice = m("comet_ice", (0.75, 0.92, 1.0), 0.2, 0.0, (0.3, 0.6, 0.8))
+    rock = m("comet_rock", (0.32, 0.3, 0.36), 0.9)
+    tail_a = m("comet_tail", (0.45, 0.95, 1.0), 0.2, 0.0, (0.3, 0.85, 1.0))
+    tail_b = m("comet_tail_pink", (1.0, 0.6, 0.95), 0.2, 0.0, (0.9, 0.4, 0.9))
+    o.append(sphere((-0.4, 0.45, 0), (0.38, 0.34, 0.36), rock, 12, 8))
+    import random as _r
+    rng = _r.Random(8)
+    for k in range(9):   # icy crystals poking out of it
+        a, b_ = rng.uniform(0, math.tau), rng.uniform(-0.8, 0.8)
+        d = Vector((math.cos(a) * math.cos(b_), math.sin(b_), math.sin(a) * math.cos(b_)))
+        c = Vector((-0.4, 0.45, 0)) + d * 0.3
+        o.append(cyl(c, c + d * rng.uniform(0.12, 0.25), 0.07, 0.0, ice, 5))
+    # A fizzing tail streaming off behind (+X).
+    for k in range(6):
+        y, z = rng.uniform(-0.2, 0.2), rng.uniform(-0.2, 0.2)
+        o.append(cyl((-0.2, 0.45 + y * 0.5, z * 0.5), (1.1 + rng.uniform(0, 0.4), 0.45 + y * 2.0, z * 2.0),
+                     0.16 - k * 0.015, 0.0, tail_a if k % 2 == 0 else tail_b, 8))
+    return o
+
+
 def main():
     reset()
     objs = []
     for i, fn in enumerate([mitten, pizza, mixtape, snowmobile, mammoth, helmet, caveman, fish, phone, bottle, egg,
-                            skater, rowboat, treasure, whale, monster, ufo, sun_ray]):
+                            skater, rowboat, treasure, whale, monster, ufo, sun_ray,
+                            duck_captain, lobster, diving_helmet, treasure_map, mermaid_guitar, robot_seagull, narwhal,
+                            golden_anchor, parrot, submarine, giant_pearl, kraken, mermaid_throne, comet]):
         objs.append(join(fn(), "Find%d" % i))
     export("finds", objs)
 

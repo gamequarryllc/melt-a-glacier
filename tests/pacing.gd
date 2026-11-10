@@ -8,7 +8,7 @@ extends SceneTree
 ## browsing. Real first runs land somewhere between the two.
 ## Add "seed=N" for a different roll of the dice. For tuning the lake without
 ## editing files: "worth=X" (what its ice sells for) and "lakehp=K" (x the hp of
-## its layers from Jade Ice down).
+## its layers from Jade Ice down). "map=harbor" plays Frozen Harbor.
 ## Variables stay untyped: this compiles before the GameState autoload exists.
 
 const DT := 0.05                 # must match --fixed-fps 20
@@ -34,6 +34,7 @@ var from_finds := 0.0
 var last_report := {"t": 0.0, "tool": 0.0, "finds": 0.0, "all": 0.0}
 var lake_worth := -1.0
 var lake_hp := 1.0
+var map := "valley"
 
 
 func _initialize() -> void:
@@ -47,6 +48,8 @@ func _initialize() -> void:
 			rng.seed = int(a.substr(5))
 		elif a.begins_with("worth="):
 			lake_worth = float(a.substr(6))
+		elif a.begins_with("map="):
+			map = a.substr(4)
 		elif a.begins_with("lakehp="):
 			lake_hp = float(a.substr(7))
 	if rng.seed == 0:
@@ -81,7 +84,7 @@ static func _work(field) -> float:
 
 func _run() -> void:
 	gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save(map)
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	await process_frame

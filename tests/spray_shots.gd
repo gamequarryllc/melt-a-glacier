@@ -2,7 +2,7 @@ extends SceneTree
 ## Shots of every tool's spray: first person and from the side, with no
 ## upgrades and with Heat Output, Wider Nozzle and Longer Reach maxed.
 ##   xvfb-run -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 -s res://tests/spray_shots.gd -- /tmp/spray [tool=N] [phone]
-## "phone" renders at 844x390 like an iPhone held sideways.
+## "phone" renders at 844x390 like an iPhone held sideways. "map=harbor": Frozen Harbor's tools.
 ## (Untyped on purpose; see smoke_test.gd.)
 
 var out_dir := "/tmp/spray"
@@ -38,11 +38,14 @@ func _run() -> void:
 	if args.has("phone"):
 		root.size = Vector2i(844, 390)
 	var only := -1
+	var map := "valley"
 	for a in args:
 		if a.begins_with("tool="):
 			only = int(a.substr(5))
+		elif a.begins_with("map="):
+			map = a.substr(4)
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save(map)
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	var player = world.player
@@ -68,7 +71,7 @@ func _run() -> void:
 				for k in ["heat", "nozzle", "reach"]:
 					gs.upgrade_levels[k] = int(gs.upgrade_def(k).max)
 			var back := 2.6 + (3.0 if tool_i >= 3 else 0.0) + (3.0 if maxed and tool_i >= 3 else 0.0)
-			if tool_i == 5:
+			if tool_i == 5 or map != "valley":
 				back = 9.0
 			var tgt := Vector3(1.0, 1.0, front_z - 0.8)
 			player.position = Vector3(1.4, 0.0, front_z + back)
@@ -84,6 +87,8 @@ func _run() -> void:
 			var mid: Vector3 = eye.lerp(tgt, 0.5)
 			var span: float = eye.distance_to(tgt)
 			side_cam.global_position = mid + Vector3(-span * 0.8 - 1.2, 0.9, 0.6)
+			if map != "valley":   # bolts and meteors come out of the sky: look from further, a bit up
+				side_cam.global_position = mid + Vector3(-span * 1.6 - 6.0, 4.0, 2.0)
 			side_cam.look_at(mid, Vector3.UP)
 			side_cam.current = true
 			await _frames(6)

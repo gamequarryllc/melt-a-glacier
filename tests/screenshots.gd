@@ -34,7 +34,7 @@ func _aim_at(player, target: Vector3) -> void:
 
 func _run() -> void:
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	var hud = world.hud
@@ -230,7 +230,7 @@ func _run() -> void:
 	_aim_at(player, Vector3(0.0, 0.0, 66.0))
 	await _frames(60)
 	await _shot("15_lake_free")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	quit(0)
 
 
