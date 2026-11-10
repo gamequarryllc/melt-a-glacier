@@ -107,7 +107,9 @@ func _process(delta: float) -> void:
 func upgrade_mult(key: String) -> float:
 	for u in Balance.UPGRADES:
 		if u.key == key:
-			return 1.0 + float(u.per_level) * float(upgrade_levels.get(key, 0))
+			var lvl := int(upgrade_levels.get(key, 0))
+			var plain := mini(lvl, int(u.get("over_from", lvl)))   # levels past this multiply instead
+			return (1.0 + float(u.per_level) * plain) * pow(float(u.get("over_mult", 1.0)), lvl - plain)
 	return 1.0
 
 

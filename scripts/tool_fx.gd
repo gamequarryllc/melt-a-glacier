@@ -226,7 +226,7 @@ func _build(tool_i: int, gold: bool) -> void:
 	_laser = null
 	_tip = null
 	var heat_lv := int(GameState.upgrade_levels.get("heat", 0))
-	var heat := 1.0 + heat_lv / 25.0               # 1 .. 2 with Heat Output maxed
+	var heat := 1.0 + minf(heat_lv, 25.0) / 25.0 + 0.025 * maxf(heat_lv - 25.0, 0.0)   # 1 .. 2 at Lv 25, a touch more in overdrive
 	var hot := clampf(heat_lv / 25.0, 0.0, 1.0)    # 0 .. 1: hotter looks brighter and whiter
 	var more := 0.85 + 0.35 * hot                  # and denser
 	var nozzle: float = GameState.upgrade_mult("nozzle")   # 1 .. 1.7
