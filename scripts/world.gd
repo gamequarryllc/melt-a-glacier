@@ -29,18 +29,6 @@ const CHURCH_ROOF := 1.6
 const TOWER := [0, -12, 2, 2]              # in front of the nave
 const TOWER_TOP := 9.0                     # the spire on top pokes out of the ice
 const SPIRE := 3.8
-# Frozen Harbor's houses: red and ochre fishing cabins (rorbuer) with dark
-# roofs: walls, roof, shutters for house i.
-const RORBU = [
-	[Color(0.7, 0.16, 0.13), Color(0.22, 0.24, 0.27), Color(0.95, 0.93, 0.86)],
-	[Color(0.87, 0.64, 0.24), Color(0.3, 0.27, 0.25), Color(0.2, 0.36, 0.5)],
-	[Color(0.94, 0.93, 0.88), Color(0.24, 0.3, 0.38), Color(0.7, 0.16, 0.13)],
-	[Color(0.62, 0.14, 0.12), Color(0.28, 0.4, 0.26), Color(0.95, 0.93, 0.86)],
-	[Color(0.3, 0.45, 0.58), Color(0.22, 0.24, 0.27), Color(0.95, 0.93, 0.86)],
-]
-# The lighthouse, from the keeper's cottage corner (CHURCH): tower centre x, z,
-# radius, and the height of the gallery the lamp room stands on.
-const LIGHTHOUSE = [2.0, 6.0, 1.3, 17.0]
 const VILLAGERS = ["Grandma", "Grandpa", "Kid", "Woman", "Man", "Dog", "Cat", "Rooster"]   # meshes in characters.glb
 const FLOWERS = ["Daisy", "Tulip", "Cosmos", "Sunflower"]   # meshes in nature.glb
 
@@ -53,6 +41,9 @@ var hud: Hud
 var shed: Shed
 var solids: Array[AABB] = []
 var fleet: PirateFleet         # the goblin pirate ships frozen in the lake
+var town: HarborTown           # Frozen Harbor's cabins, quay and pier (null in the valley)
+var spawn := SPAWN             # where you start, and where Respawn puts you (the level can say)
+var spawn_yaw := SPAWN_YAW
 
 var _mountains: MeshInstance3D
 var _mats := {}
@@ -96,6 +87,8 @@ func _ready() -> void:
 	var floor_shape := CollisionShape3D.new()
 	floor_shape.shape = WorldBoundaryShape3D.new()
 	_world_body.add_child(floor_shape)
+	spawn = level.get("spawn", SPAWN)
+	spawn_yaw = level.get("spawn_yaw", SPAWN_YAW)
 	_build_environment()
 	_build_shed()
 	_build_ground()
@@ -148,7 +141,7 @@ func _ready() -> void:
 	player.grid = GameState.grid
 	_set_bounds()
 	add_child(player)
-	var pos := GameState.player_pos if GameState.player_pos.is_finite() else SPAWN
+	var pos := GameState.player_pos if GameState.player_pos.is_finite() else spawn
 	pos.x = clampf(pos.x, player.bounds_min.x + 0.5, player.bounds_max.x - 0.5)
 	pos.z = clampf(pos.z, player.bounds_min.z + 0.5, player.bounds_max.z - 0.5)
 	pos.y = maxf(pos.y, 0.0)
@@ -156,7 +149,7 @@ func _ready() -> void:
 	if GameState.player_pos.is_finite():
 		player.set_view(GameState.player_yaw, GameState.player_pitch)
 	else:
-		player.set_view(SPAWN_YAW, -0.12)
+		player.set_view(spawn_yaw, -0.12)
 	player.unstick()
 	GameState.player = player
 
@@ -197,7 +190,7 @@ func _ready() -> void:
 
 func respawn() -> void:
 	## The "I'm stuck" button: back to the start, next to the shed.
-	player.respawn(SPAWN, SPAWN_YAW)
+	player.respawn(spawn, spawn_yaw)
 	Sound.play("respawn", -4.0)
 	hud.toast("🏠 Back at the start")
 
@@ -815,7 +808,7 @@ func _update_floats(delta: float) -> void:
 # =====================================================================================
 func _update_slow() -> void:
 	var melted := 1.0 - grid.fraction_left()
-	Ground.set_green(clampf(pow(melted, 0.6), 0.0, 1.0))
+	Ground.set_green(clampf(pow(melted, 0.6), 0.0, 1.0) * float(Levels.look("green_max", 1.0)))
 	for f in _flowers:
 		var node: Node3D = f.node
 		if node.visible:
@@ -892,6 +885,12 @@ func _set_bounds() -> void:
 	## Before the village is free: the valley floor, up to the fence. After:
 	## the whole valley floor and the lake.
 	var v: Dictionary = level.valley
+	if Coast.is_coast(level):
+		# By the sea: the shore, and once the pier's gate is open, the pier and the bay.
+		player.bounds_min = Vector3(-400.0, -1.0, -400.0)
+		player.bounds_max = Vector3(400.0, 80.0, 400.0)
+		player.walkable = walkable
+		return
 	if GameState.stage == 0:
 		player.bounds_min = Vector3(-(float(v.half_width) - 1.5), -1.0, float(v.back_z) + 1.5)
 		player.bounds_max = Vector3(float(v.half_width) - 1.5, 80.0, float(v.gate_z) - 0.45)
@@ -905,6 +904,11 @@ func _set_bounds() -> void:
 
 func walkable(x: float, z: float) -> bool:
 	## On the valley floor or the lake, not up in the mountains (or Kevin's hollow).
+	var v: Dictionary = level.valley
+	if Coast.is_coast(level):
+		if Coast.land_distance(v, x, z) < -0.45:
+			return true
+		return GameState.stage > 0 and (Coast.bay_distance(v, x, z) < -1.0 or Coast.on_pier(v, x, z))
 	return Scenery.floor_distance(level.valley, x, z, Vector2.INF, Vector2.ZERO) < -1.5
 
 
@@ -912,6 +916,11 @@ func _build_fence() -> void:
 	## A wooden fence right across the valley in front of the lake, with a gate
 	## in the middle that stays locked until the village is free.
 	var v: Dictionary = level.valley
+	if Coast.is_coast(level):
+		# The harbour has a quay with a pier instead (HarborTown): just the gate, at the pier's foot.
+		var at: Vector2 = v.gate
+		_build_gate(at.x, at.y, HarborTown.PIER_HALF)
+		return
 	var z: float = v.gate_z
 	var half := float(v.half_width) + 2.0   # into the foot of the mountains on both sides
 	var gap := 1.7                          # half the gate's width
@@ -935,9 +944,15 @@ func _build_fence() -> void:
 		var lo := minf(x0, x1)
 		var fence := AABB(Vector3(lo, 0.0, z - 0.2), Vector3(len, 1.4, 0.4))
 		solids.append(fence)
-	# The gate: one leaf hinged on the left post.
+	_build_gate(0.0, z, gap)
+
+
+func _build_gate(mid_x: float, z: float, gap: float) -> void:
+	## The gate: one leaf hinged on the left post, its lock, and the sign beside it.
+	var wood := Color(0.52, 0.37, 0.24)
+	var dark := wood.darkened(0.25)
 	_gate = Node3D.new()
-	_gate.position = Vector3(-gap, 0.0, z)
+	_gate.position = Vector3(mid_x - gap, 0.0, z)
 	add_child(_gate)
 	var w := gap * 2.0
 	for y in [0.35, 0.8, 1.25]:
@@ -955,11 +970,11 @@ func _build_fence() -> void:
 	var bs := BoxShape3D.new()
 	bs.size = Vector3(w, 1.5, 0.3)
 	_gate_shape.shape = bs
-	_gate_shape.position = Vector3(0.0, 0.75, z)
+	_gate_shape.position = Vector3(mid_x, 0.75, z)
 	body.add_child(_gate_shape)
 	add_child(body)
 	# A sign on the valley side, by the gate.
-	var sign_x := gap + 1.9
+	var sign_x := mid_x + gap + 1.9
 	_box(Vector3(0.1, 1.75, 0.1), Vector3(sign_x - 0.8, 0.875, z - 0.25), dark)
 	_box(Vector3(0.1, 1.75, 0.1), Vector3(sign_x + 0.8, 0.875, z - 0.25), dark)
 	_box(Vector3(1.95, 0.86, 0.06), Vector3(sign_x, 1.35, z - 0.3), Color(0.93, 0.88, 0.76))
@@ -1119,11 +1134,14 @@ func _build_environment() -> void:
 
 
 func _build_ground() -> void:
-	# The valley floor, with the river's course and the lake cut into it.
-	add_child(Ground.floor_node(level))
+	var coast := Coast.is_coast(level)
+	# The valley floor, with the river's course and the lake cut into it
+	# (or, by the sea, the shore).
+	add_child(Coast.floor_node(level) if coast else Ground.floor_node(level))
 
-	# The meltwater lake past the glacier's tongue, and the river that feeds it.
-	_lake_water = Scenery.lake(level)
+	# The meltwater lake past the glacier's tongue, and the river that feeds
+	# it (or the sea, out to the horizon).
+	_lake_water = Coast.sea(level) if coast else Scenery.lake(level)
 	_water_mat = _lake_water.material_override
 	(_water_mat as ShaderMaterial).set_shader_parameter("shallow_color", Levels.look("water_shallow", Color(0.3, 0.68, 0.72)))
 	(_water_mat as ShaderMaterial).set_shader_parameter("deep_color", Levels.look("water_deep", Color(0.07, 0.38, 0.55)))
@@ -1133,8 +1151,8 @@ func _build_ground() -> void:
 		add_child(stream)
 
 	# A few boulders for scale.
-	var spots := [Vector3(-14, 0, 13), Vector3(-5, 0, 19), Vector3(19.2, 0, 5.0), Vector3(-19, 0, 2),
-			Vector3(21, 0, -6), Vector3(4, 0, 19.5), Vector3(-20, 0, 9), Vector3(19.5, 0, 15)]
+	var spots: Array = level.valley.get("boulders", [Vector3(-14, 0, 13), Vector3(-5, 0, 19), Vector3(19.2, 0, 5.0),
+			Vector3(-19, 0, 2), Vector3(21, 0, -6), Vector3(4, 0, 19.5), Vector3(-20, 0, 9), Vector3(19.5, 0, 15)])
 	for i in spots.size():
 		var p: Vector3 = spots[i]
 		if shed.blocks(p.x, p.z, 1.0):
@@ -1152,10 +1170,13 @@ func _build_ground() -> void:
 
 func _build_mountains() -> void:
 	# One heightfield all the way round, with a hollow for Kevin the volcano.
-	var kevin := Vector2(HelperSwarm.VOLCANO_POS.x, HelperSwarm.VOLCANO_POS.z)
+	# (By the sea he has an island instead, and nothing grows on the slopes.)
+	var at := HelperSwarm.volcano_pos()
+	var kevin := Vector2.INF if Coast.is_coast(level) else Vector2(at.x, at.z)
 	_mountains = Scenery.mountains(level, kevin)
 	add_child(_mountains)
-	add_child(Scenery.slope_forest(level, 320))
+	if float(level.valley.get("tree_line", 12.0)) > 0.0:
+		add_child(Scenery.slope_forest(level, 320))
 	# The waterfall the river starts from, down the back wall.
 	var falls := Scenery.falls(level)
 	if falls != null:
@@ -1180,23 +1201,25 @@ func _build_village() -> Array:
 	## The buildings are Blender models (art/blender/build_village.py); house i
 	## is models/house_i.glb, made to fit HOUSES[i]'s footprint.
 	var carve: Array = []
-	var harbor := str(level.get("town", "")) == "harbor"
+	if Coast.is_coast(level):
+		# Frozen Harbor has a town of its own: cabins along the waterfront, the
+		# quay and the pier, the lighthouse out on the head (see HarborTown).
+		town = HarborTown.new()
+		town.name = "HarborTown"
+		add_child(town)
+		town.build(level)
+		solids.append_array(town.solids)
+		return town.carve
 	for i in HOUSES.size():
 		var hdef: Array = HOUSES[i]
 		var x := float(hdef[0])
 		var z := float(hdef[1])
 		var w := float(hdef[2])
 		var d := float(hdef[3])
-		var house := _model("house_%d" % i, Vector3(x + w * 0.5, 0.0, z + d * 0.5))
-		if harbor:
-			_recolor(house, {"plaster%d" % i: RORBU[i][0], "roof%d" % i: RORBU[i][1],
-				"shutter": RORBU[i][2], "shutter_dark": RORBU[i][2].darkened(0.25)})
+		_model("house_%d" % i, Vector3(x + w * 0.5, 0.0, z + d * 0.5))
 		var box := AABB(Vector3(x, 0, z), Vector3(w, HOUSE_WALL + HOUSE_ROOF, d))
 		carve.append(box)
 		solids.append(box)
-	if harbor:
-		_build_lighthouse(carve)
-		return carve
 	# The church, with an onion-dome steeple tall enough to poke out of the top
 	# of the glacier. The model's origin is the nave's footprint corner.
 	var cx := float(CHURCH[0])
@@ -1219,44 +1242,6 @@ func _build_village() -> Array:
 	_model("well", Vector3(1.5, 0.0, -19.5))
 	solids.append(AABB(Vector3(0.8, 0, -20.2), Vector3(1.4, 0.9, 1.4)))
 	return carve
-
-
-func _build_lighthouse(carve: Array) -> void:
-	## Frozen Harbor: a lighthouse and the keeper's cottage where the valley's
-	## church stands, tall enough that its lamp pokes out of the glacier (the
-	## harbour's taller ice), and a stack of lobster pots in the square.
-	var cx := float(CHURCH[0])
-	var cz := float(CHURCH[1])
-	var lh := Models.baked_instance(Models.baked("harbor", "Lighthouse"))
-	lh.position = Vector3(cx, 0.0, cz)
-	add_child(lh)
-	var cottage := AABB(Vector3(cx, 0, cz), Vector3(float(CHURCH[2]), CHURCH_WALL + CHURCH_ROOF, float(CHURCH[3])))
-	carve.append(cottage)
-	solids.append(cottage)
-	var c := Vector2(cx + LIGHTHOUSE[0], cz + LIGHTHOUSE[1])
-	var r: float = LIGHTHOUSE[2]
-	var tower := AABB(Vector3(c.x - r, 0, c.y - r), Vector3(2.0 * r, LIGHTHOUSE[3], 2.0 * r))
-	carve.append(tower)
-	solids.append(tower)
-	solids.append(AABB(Vector3(c.x - 1.0, LIGHTHOUSE[3], c.y - 1.0), Vector3(2.0, 2.6, 2.0)))
-	var pots := Models.baked_instance(Models.baked("harbor", "Pots"))
-	pots.position = Vector3(1.5, 0.0, -19.5)
-	add_child(pots)
-	solids.append(AABB(Vector3(0.8, 0, -20.2), Vector3(1.4, 1.0, 1.4)))
-
-
-static func _recolor(n: Node, colors: Dictionary) -> void:
-	## Paints the parts of a Blender model whose material is named in `colors`.
-	if n is MeshInstance3D:
-		var mi := n as MeshInstance3D
-		for s in mi.mesh.get_surface_count():
-			var m := mi.mesh.surface_get_material(s) as BaseMaterial3D
-			if m != null and colors.has(m.resource_name):
-				var c := m.duplicate() as BaseMaterial3D
-				c.albedo_color = colors[m.resource_name]
-				mi.set_surface_override_material(s, c)
-	for k in n.get_children():
-		_recolor(k, colors)
 
 
 func _build_fleet() -> void:
@@ -1295,6 +1280,8 @@ func _build_trees() -> void:
 	var near := []
 	var far := []
 	var v: Dictionary = level.valley
+	if Coast.is_coast(level):
+		return   # too far north for trees
 	for i in 120:
 		var side := -1.0 if i % 2 == 0 else 1.0
 		var x: float
@@ -1307,7 +1294,7 @@ func _build_trees() -> void:
 			var hw: float = v.half_width + maxf(0.0, z - v.flare_z) * v.flare
 			x = side * _rng.randf_range(12.0, hw - 1.0)
 		if shed.blocks(x, z, 1.2) or Scenery.on_lake(level, x, z, 2.0) \
-				or Scenery.near_stream(level, x, z, 1.5) or Vector2(x - SPAWN.x, z - SPAWN.z).length() < 4.0 \
+				or Scenery.near_stream(level, x, z, 1.5) or Vector2(x - spawn.x, z - spawn.z).length() < 4.0 \
 				or absf(z - float(v.gate_z)) < 1.6:
 			continue
 		var s := _rng.randf_range(0.8, 1.4) if i < 30 else _rng.randf_range(0.9, 1.7)
@@ -1327,11 +1314,22 @@ func _build_flowers() -> void:
 	# that spot is bare, and out in the valley as the whole glacier shrinks.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = Balance.WORLD_SEED + 21
+	var coast := Coast.is_coast(level)
+	var bed: Array = level.glaciers[0].get("finds_box", [Vector2(-16.5, -24.0), Vector2(16.5, 4.0)])
 	for i in 44:
 		var inside := i < 26
 		var x: float
 		var z: float
-		if inside:
+		if coast:
+			# Where the ice lay, and along the shore.
+			var p := Vector2(rng.randf_range(bed[0].x, bed[1].x), rng.randf_range(bed[0].y, bed[1].y)) if inside \
+					else Coast.random_land(level.valley, rng, 1.0)
+			if not p.is_finite() or Coast.land_distance(level.valley, p.x, p.y) > -1.0:
+				continue
+			x = p.x
+			z = p.y
+			inside = grid.original_top(x, z) > 0.3
+		elif inside:
 			x = rng.randf_range(-16.5, 16.5)
 			z = rng.randf_range(-24.0, 4.0)
 		else:
@@ -1355,9 +1353,11 @@ func _build_flowers() -> void:
 func _build_villagers() -> void:
 	## The villagers who come out to celebrate when the ice is gone
 	## (art/blender/build_characters.py). They hop on the spot, facing the valley.
-	var spots := [Vector3(-7.5, 0.0, -16.6), Vector3(-2.5, 0.0, -18.3), Vector3(7.0, 0.0, -17.4),
+	var spots: Array = [Vector3(-7.5, 0.0, -16.6), Vector3(-2.5, 0.0, -18.3), Vector3(7.0, 0.0, -17.4),
 		Vector3(1.0, 0.0, -9.2), Vector3(-6.5, 0.0, -10.5), Vector3(4.5, 0.0, -10.8),
 		Vector3(3.2, 0.0, -19.0), Vector3(-0.8, 0.0, -20.5)]
+	if town != null:
+		spots = town.villager_spots
 	for i in VILLAGERS.size():
 		var v := Node3D.new()
 		var mi := Models.baked_instance(Models.baked("characters", VILLAGERS[i]))

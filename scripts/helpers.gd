@@ -10,6 +10,7 @@ extends Node3D
 const WALKER_TYPES := [0, 1]           # indices into Balance.HELPERS that walk
 const VOLCANO_TYPE := 2
 const VOLCANO_POS := Vector3(-30.0, 13.0, -47.0)   # in his hollow, clear of the path behind the glacier
+
 const WALK_SPEED := [1.2, 1.5]         # m/s, per walker type
 const ROAM := [6.0, 9.0]               # furthest they head for in one go
 # Their heat lands in a few small, shallow spots scattered around them (the
@@ -42,6 +43,12 @@ var _smoke: CPUParticles3D
 var _kevin_sign: Label3D
 var _kevin_level := -1                 # what his sign and smoke show
 var _spawned := 0
+
+
+static func volcano_pos() -> Vector3:
+	## The top of Kevin's crater: in his hollow in the valley's mountains, or
+	## wherever the map puts him (Frozen Harbor: an island in the bay).
+	return Levels.current().get("volcano", VOLCANO_POS)
 
 
 func _ready() -> void:
@@ -124,7 +131,10 @@ func _spawn_walker(t: int) -> void:
 		body.get_node("Bucket").add_child(fx)
 	var p := grid.random_surface_point(_rng)
 	if p == Vector3.INF:
+		# No ice left to stand on: by the glacier's toe, or (a map of another shape) in its bed.
 		p = Vector3(_rng.randf_range(-8.0, 8.0), 0.0, 8.0)
+		if Coast.is_coast(Levels.current()):
+			p = grid.origin + Vector3(_rng.randf_range(2.0, 10.0), 0.0, _rng.randf_range(2.0, 10.0))
 	p.y = grid.surface_y(p.x, p.z)   # the same smoothed surface they walk on
 	node.position = p
 	node.rotation.y = _rng.randf() * TAU
@@ -354,9 +364,9 @@ func _show_kevin_level(level: int) -> void:
 
 func _build_volcano() -> void:
 	_volcano = Creatures.volcano()
-	_volcano.position = VOLCANO_POS + Vector3(0, -13, 0)
+	_volcano.position = volcano_pos() + Vector3(0, -13, 0)
 	# Face the glacier.
-	var to := Vector3(0, 0, -12) - _volcano.position
+	var to: Vector3 = Levels.current().get("volcano_faces", Vector3(0, 0, -12)) - _volcano.position
 	_volcano.rotation.y = atan2(to.x, to.z)
 	add_child(_volcano)
 	_smoke = _make_fx(Color(0.45, 0.42, 0.42, 0.55), Color(0.6, 0.6, 0.62, 0.0), 3.0, 26, 5.0)
@@ -412,7 +422,7 @@ func _launch_bomb(to: Vector3, damage: float, size: float = 1.0) -> void:
 	trail.gravity = Vector3(0, 0.5, 0)
 	node.add_child(trail)
 	trail.emitting = true
-	var from := VOLCANO_POS + Vector3(0, 0.5, 0)
+	var from := volcano_pos() + Vector3(0, 0.5, 0)
 	node.position = from
 	Sound.play_at("kevin_launch", from, -2.0 + 2.0 * size, 1.05 - 0.1 * (size - 1.0), 0.08, 22.0)
 	var far := from.distance_to(to)   # the lake is a long way off: higher, slower lobs

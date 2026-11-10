@@ -216,6 +216,10 @@ func _float(_delta: float) -> void:
 	var k := 0
 	for s in ships:
 		var node: Node3D = s.node
+		if s.def.get("ashore", false):   # hauled up on land: nothing to float on
+			if not s.freed:
+				_wake(s, false)
+			continue
 		var t := _time + k * 1.7
 		node.position.y = float(s.def.pos.y) - 0.1 + sin(t * 0.9) * 0.12
 		node.rotation.z = sin(t * 0.6) * 0.035

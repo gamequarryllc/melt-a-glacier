@@ -20,6 +20,8 @@ const NEAR_TREES := 6.0      # slope pines this close to the valley floor are th
 # =====================================================================================
 static func floor_distance(v: Dictionary, x: float, z: float, hollow: Vector2, gap_to: Vector2) -> float:
 	## Metres outside the flat valley floor (negative inside it).
+	if v.get("coast", false):
+		return Coast.flat_distance(v, x, z)   # a shore and the sea instead (no hollow: Kevin has an island)
 	var hw: float = v.half_width + maxf(0.0, z - v.flare_z) * v.flare
 	var d := maxf(absf(x) - hw, maxf(v.back_z - z, z - v.front_z))
 	var lk: Array = v.lake
@@ -45,7 +47,7 @@ static func _axis(i: int) -> float:
 	return signf(u) * EXTENT * pow(absf(u), WARP)
 
 
-static var _hf := {}   # the mountains' heights as built: {xs, zs, h, n, v, hollow, gap_to}
+static var _hf := {}   # the mountains' heights as built: {xs, zs, h, n, v, hollow, gap_to, cx, cz}
 
 
 static func mountains(level: Dictionary, hollow: Vector2) -> MeshInstance3D:
@@ -73,14 +75,19 @@ static func mountains(level: Dictionary, hollow: Vector2) -> MeshInstance3D:
 	var falls_a: Vector2 = v.get("falls_top", Vector2.INF)
 	var falls_b: Vector2 = v.stream[1] if v.has("stream") else Vector2.INF
 
+	# The grid is finest round its middle: the valley's, or the level's own.
+	var mid: Vector2 = v.get("center", Vector2(0.0, CENTER_Z))
+	# By the sea the land has to end somewhere: the mountains sink away
+	# toward the edge of the grid instead of stopping in a wall.
+	var sinks: bool = v.get("coast", false)
 	var n := SAMPLES + 1
 	var xs := PackedFloat32Array()
 	var zs := PackedFloat32Array()
 	xs.resize(n)
 	zs.resize(n)
 	for i in n:
-		xs[i] = _axis(i)
-		zs[i] = CENTER_Z + _axis(i)
+		xs[i] = mid.x + _axis(i)
+		zs[i] = mid.y + _axis(i)
 	var h := PackedFloat32Array()
 	var outside := PackedByteArray()
 	h.resize(n * n)
@@ -105,8 +112,11 @@ static func mountains(level: Dictionary, hollow: Vector2) -> MeshInstance3D:
 				if falls_a.is_finite():
 					var off := _segment_distance(Vector2(x, z), falls_a, falls_b)
 					y -= 1.6 * exp(-off * off / 6.0) * minf(1.0, d / 4.0)
+				if sinks:
+					var out := maxf(absf(x - mid.x), absf(z - mid.y))
+					y = lerpf(y, 0.2, smoothstep(EXTENT * 0.62, EXTENT - 6.0, out))
 			h[k * n + i] = y
-	_hf = {"xs": xs, "zs": zs, "h": h, "n": n, "v": v, "hollow": hollow, "gap_to": gap_to}
+	_hf = {"xs": xs, "zs": zs, "h": h, "n": n, "v": v, "hollow": hollow, "gap_to": gap_to, "cx": mid.x, "cz": mid.y}
 
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -114,8 +124,8 @@ static func mountains(level: Dictionary, hollow: Vector2) -> MeshInstance3D:
 	verts.resize(n * n)
 	normals.resize(n * n)
 	colors.resize(n * n)
-	var rock_a := Color(0.6, 0.55, 0.49)
-	var rock_b := Color(0.47, 0.49, 0.54)
+	var rock_a: Color = Levels.look("rock_a", Color(0.6, 0.55, 0.49))
+	var rock_b: Color = Levels.look("rock_b", Color(0.47, 0.49, 0.54))
 	for k in n:
 		for i in n:
 			var idx := k * n + i
@@ -157,7 +167,9 @@ static func mountains(level: Dictionary, hollow: Vector2) -> MeshInstance3D:
 	mat.set_shader_parameter("tree_line", float(v.get("tree_line", 12.0)))
 	mat.set_shader_parameter("facets", 0.7)
 	mat.set_shader_parameter("settle", 1.0)
-	mat.set_shader_parameter("glacier_source", Vector3(0.0, 0.0, float(v.back_z) - 7.0))
+	mat.set_shader_parameter("glacier_source", v.get("glacier_source", Vector3(0.0, 0.0, float(v.get("back_z", 0.0)) - 7.0)))
+	var sun: Vector3 = Levels.look("sun_dir", Vector3(-0.58, -0.6, -0.55))
+	mat.set_shader_parameter("sun_dir", -sun.normalized())
 	Ground.bind(level, mat, "mountains")
 	var mi := MeshInstance3D.new()
 	mi.name = "Mountains"
@@ -176,8 +188,8 @@ static func height_at(x: float, z: float) -> float:
 	var xs: PackedFloat32Array = _hf.xs
 	var zs: PackedFloat32Array = _hf.zs
 	var h: PackedFloat32Array = _hf.h
-	var i := clampi(_cell(x), 0, n - 2)
-	var k := clampi(_cell(z - CENTER_Z), 0, n - 2)
+	var i := clampi(_cell(x - float(_hf.cx)), 0, n - 2)
+	var k := clampi(_cell(z - float(_hf.cz)), 0, n - 2)
 	var fx := clampf((x - xs[i]) / (xs[i + 1] - xs[i]), 0.0, 1.0)
 	var fz := clampf((z - zs[k]) / (zs[k + 1] - zs[k]), 0.0, 1.0)
 	var ha := h[k * n + i]
@@ -324,8 +336,9 @@ static var _rock_mats := {}
 static func rock_material(foot: float = 0.0) -> ShaderMaterial:
 	## The mountains' rock shader without snow or plants, for boulders and
 	## Kevin. foot = how much the bottom metres blend into the valley floor.
-	if not _rock_mats.has(foot):
-		var level := Levels.current()
+	var level := Levels.current()
+	var key := "%s/%s" % [level.name, foot]   # each map has its own rock and its own ground
+	if not _rock_mats.has(key):
 		var m := ShaderMaterial.new()
 		m.shader = load("res://shaders/mountain.gdshader")
 		m.set_shader_parameter("rock_tex", rock_texture(int(level.seed)))
@@ -333,8 +346,8 @@ static func rock_material(foot: float = 0.0) -> ShaderMaterial:
 		m.set_shader_parameter("tree_line", 0.0)
 		m.set_shader_parameter("foot_amount", foot)
 		Ground.bind(level, m, "rock%s" % foot)
-		_rock_mats[foot] = m
-	return _rock_mats[foot]
+		_rock_mats[key] = m
+	return _rock_mats[key]
 
 
 static func boulder_mesh(variant: int) -> ArrayMesh:
@@ -359,7 +372,9 @@ static func boulder_mesh(variant: int) -> ArrayMesh:
 			p.y = maxf(p.y, -0.12)   # sits flat on the ground
 			row.append(p)
 		pts.append(row)
-	var tint := Color(0.58, 0.56, 0.53).lerp(Color(0.5, 0.51, 0.54), float(variant % 3) / 2.0)
+	var warm: Color = Levels.look("boulder", Color(0.58, 0.56, 0.53))   # a map can have stone of its own
+	var cool: Color = Levels.look("boulder_b", Color(0.5, 0.51, 0.54))
+	var tint := warm.lerp(cool, float(variant % 3) / 2.0)
 	for r in rings:
 		for sg in segs:
 			var s2 := (sg + 1) % segs
@@ -717,6 +732,8 @@ static func stream_material(falling: float) -> ShaderMaterial:
 
 
 static func on_lake(level: Dictionary, x: float, z: float, margin: float = 0.0) -> bool:
+	if Coast.is_coast(level):
+		return z > Coast.shore(level.valley, x) - margin
 	var lk: Array = level.valley.lake
 	var ex: float = (x - lk[0]) / (lk[2] * 1.12 + margin)
 	var ez: float = (z - lk[1]) / (lk[3] * 1.12 + margin)

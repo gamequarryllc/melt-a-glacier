@@ -662,12 +662,31 @@ func _run() -> void:
 		"the harbour starts with the Orbital Mirror, and 5 new tools to buy")
 	check(world3._find_markers.size() == Balance.DISCOVERIES.size() and Balance.DISCOVERIES.size() == 14,
 		"all %d harbour finds placed" % world3._find_markers.size())
-	check(world3.fleet.ships.size() == 4 and gs.grids.size() == 2 and gs.grids[0].layers[0].name == "Sea Snow",
-		"the harbour glacier, the frozen bay and its 4 fishing boats")
+	check(world3.fleet.ships.size() == 5 and gs.grids.size() == 2 and gs.grids[0].layers[0].name == "Sea Snow",
+		"the harbour glacier, the frozen bay and the 5 fishing boats in them")
 	check(gs.helper_cost(0) > 1000.0 * float(Balance.BASE_HELPERS[0].base), "harbour prices are scaled up")
+	# It's a map of its own: a quay on the open sea, not the valley again.
 	var p3 = gs.player
-	p3.position = Vector3(1.0, 0.0, 12.0)
-	p3.set_view(0.0, -0.2)
+	var hv: Dictionary = world3.level.valley
+	var gate3: Vector2 = hv.gate
+	check(Coast.is_coast(world3.level) and world3.town != null and world3.town.carve.size() >= 9,
+		"the harbour is a coast with its own town (%d cabins under the ice)" % world3.town.carve.size())
+	check(p3.position.distance_to(world3.spawn) < 1.0 and world3.walkable(world3.spawn.x, world3.spawn.z)
+		and not world3.walkable(world3.spawn.x, gate3.y + 6.0) and not world3.walkable(gate3.x, gate3.y + 3.0),
+		"you start on the quay, and the sea and the pier are closed")
+	var buried := 0
+	for box in world3.town.carve:
+		var mid: Vector3 = (box as AABB).get_center()
+		if gs.grid.original_top(mid.x, mid.z) > (box as AABB).end.y + 0.5:
+			buried += 1
+	check(buried == world3.town.carve.size(), "every cabin is under the ice (%d of %d)" % [buried, world3.town.carve.size()])
+	gs.stage = 1
+	check(world3.walkable(gate3.x, gate3.y + 3.0) and world3.walkable(gate3.x, gate3.y + 30.0)
+		and not world3.walkable(gate3.x, gate3.y + 200.0),
+		"once the harbour is free the pier leads out onto the bay, as far as the breakwater")
+	gs.stage = 0
+	p3.position = Vector3(-8.0, 0.0, -4.0)
+	p3.set_view(PI * 0.5, 0.25)
 	p3.unstick()
 	var before3: float = gs.grid.volume_left()
 	world3.force_melt = true

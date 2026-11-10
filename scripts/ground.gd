@@ -139,6 +139,13 @@ static func lake_distance(level: Dictionary, x: float, z: float) -> float:
 
 static func _glacier_distance(g: Dictionary, x: float, z: float) -> float:
 	## Metres outside the first glacier's footprint, roughly (negative under it).
+	if g.get("kind", "tongue") == "blobs":
+		var best := 100.0
+		for b in g.blobs:
+			var ex := (x - float(b[0])) / float(b[2])
+			var ez := (z - float(b[1])) / float(b[3])
+			best = minf(best, (sqrt(ex * ex + ez * ez) - 1.0) * minf(float(b[2]), float(b[3])))
+		return best
 	if g.get("kind", "tongue") != "tongue":
 		return 100.0
 	var t := clampf((z - float(g.full_z)) / (float(g.snout_z) - float(g.full_z)), 0.0, 1.0)
@@ -196,7 +203,8 @@ static func _ensure(level: Dictionary) -> void:
 	var data := PackedByteArray()
 	data.resize(n * n * 4)
 	var o := 0
-	var lk: Array = level.valley.lake
+	var coast := Coast.is_coast(level)
+	var lk: Array = level.valley.get("lake", [0.0, 0.0, 1.0, 1.0])
 	var lake_from: float = lk[1] - lk[3] * 1.1 - 14.0   # nearer rows are nowhere near the lake
 	var ice_to := float(g0.get("snout_z", 0.0)) + 14.0
 	for row in n:
@@ -205,9 +213,13 @@ static func _ensure(level: Dictionary) -> void:
 			var x := MAP_MIN.x + (col + 0.5) * texel
 			var i := row * n + col
 			data[o] = _enc(stream[i], -2.0, 6.0)
-			data[o + 1] = _enc(lake_distance(level, x, z) - LAKE_WATERLINE, -4.0, 12.0) if z > lake_from else 255
+			if coast:   # the sea is its "lake": metres up the shore from the water's edge
+				data[o + 1] = _enc(Coast.shore(level.valley, x) - z, -4.0, 12.0)
+				data[o + 3] = _enc(_glacier_distance(g0, x, z), -4.0, 12.0)
+			else:
+				data[o + 1] = _enc(lake_distance(level, x, z) - LAKE_WATERLINE, -4.0, 12.0) if z > lake_from else 255
+				data[o + 3] = _enc(_glacier_distance(g0, x, z), -4.0, 12.0) if z < ice_to else 255
 			data[o + 2] = _enc(path[i], 0.0, 6.0)
-			data[o + 3] = _enc(_glacier_distance(g0, x, z), -4.0, 12.0) if z < ice_to else 255
 			o += 4
 	_map_img = Image.create_from_data(n, n, false, Image.FORMAT_RGBA8, data)
 	_map_tex = ImageTexture.create_from_image(_map_img)
@@ -263,6 +275,10 @@ static func bind(level: Dictionary, mat: ShaderMaterial, key: String) -> void:
 	mat.set_shader_parameter("floor_tex", _tex)
 	mat.set_shader_parameter("floor_map_rect", Vector3(MAP_MIN.x, MAP_MIN.y, 1.0 / MAP_SPAN))
 	mat.set_shader_parameter("green", _green)
+	# A map can have ground of its own colours (Frozen Harbor: snow and tundra).
+	var palette: Dictionary = level.get("look", {}).get("ground", {})
+	for name in palette:
+		mat.set_shader_parameter(name, palette[name])
 	_users[key] = mat
 
 
@@ -489,18 +505,28 @@ static func tufts(level: Dictionary, count: int, free: Callable) -> MultiMeshIns
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(level.seed) + 81
 	var v: Dictionary = level.valley
+	var coast := Coast.is_coast(level)
 	var spots: Array = []
 	for _i in count * 3:
 		if spots.size() >= count:
 			break
-		var z := rng.randf_range(float(v.back_z) + 1.0, float(v.front_z))
-		var hw: float = v.half_width + maxf(0.0, z - v.flare_z) * v.flare
-		var x := rng.randf_range(-hw, hw)
-		# Mostly near where you walk: thin them out towards the far end.
-		if z > 30.0 and rng.randf() < (z - 30.0) / 40.0:
-			continue
-		if Scenery.floor_distance(v, x, z, Vector2.INF, Vector2.ZERO) > -0.4 or not free.call(x, z):
-			continue
+		var x: float
+		var z: float
+		if coast:
+			var p := Coast.random_land(v, rng, 0.4)
+			if not p.is_finite() or not free.call(p.x, p.y):
+				continue
+			x = p.x
+			z = p.y
+		else:
+			z = rng.randf_range(float(v.back_z) + 1.0, float(v.front_z))
+			var hw: float = v.half_width + maxf(0.0, z - v.flare_z) * v.flare
+			x = rng.randf_range(-hw, hw)
+			# Mostly near where you walk: thin them out towards the far end.
+			if z > 30.0 and rng.randf() < (z - 30.0) / 40.0:
+				continue
+			if Scenery.floor_distance(v, x, z, Vector2.INF, Vector2.ZERO) > -0.4 or not free.call(x, z):
+				continue
 		var at := grass_at(level, x, z) + 0.05
 		if at > 1.0:
 			continue
@@ -569,6 +595,19 @@ static func pebbles(level: Dictionary, free: Callable) -> MultiMeshInstance3D:
 	rng.seed = int(level.seed) + 82
 	var v: Dictionary = level.valley
 	var spots: Array = []
+	if Coast.is_coast(level):
+		# Shingle: thick along the water's edge and under the cliffs, thin elsewhere.
+		for _i in 1400:
+			var p := Coast.random_land(v, rng, 0.2)
+			if not p.is_finite() or not free.call(p.x, p.y):
+				continue
+			var wall := Scenery.floor_distance(v, p.x, p.y, Vector2.INF, Vector2.ZERO)
+			var beach := Coast.shore(v, p.x) - p.y
+			var near := maxf(exp(wall / 2.5), exp(-beach / 2.0))
+			if rng.randf() > 0.12 + 0.88 * near:
+				continue
+			spots.append([Vector3(p.x, -0.02, p.y), rng.randf_range(0.1, 0.3) * (1.0 + 0.7 * near)])
+		return _pebble_node(spots, rng)
 	var sp := stream_path(level)
 	var pts: PackedVector2Array = sp.pts
 	for i in range(4, pts.size() - 4):
@@ -602,6 +641,10 @@ static func pebbles(level: Dictionary, free: Callable) -> MultiMeshInstance3D:
 		if rng.randf() > 0.25 + 0.75 * exp(wall / 3.0) and rng.randf() > 0.3:
 			continue
 		spots.append([Vector3(x, -0.02, z), rng.randf_range(0.1, 0.3) * (1.6 if wall > -2.0 else 1.0)])
+	return _pebble_node(spots, rng)
+
+
+static func _pebble_node(spots: Array, rng: RandomNumberGenerator) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = _pebble_mesh()

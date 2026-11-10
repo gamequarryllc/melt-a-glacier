@@ -74,9 +74,13 @@ var _t := 0.0
 var _figures: Array = []       # [node, type]
 var _shown_gold := false
 var _ice_cubes := {}           # find slot -> MeshInstance3D (still frozen)
+var _paint := RED_PAINT        # the outside: the valley's red, or the map's own colour
+var _roof := ROOF
 
 
 func build(detail: Texture2D) -> void:
+	_paint = Levels.look("shed_paint", RED_PAINT)
+	_roof = Levels.look("shed_roof", ROOF)
 	_body = StaticBody3D.new()
 	_body.collision_layer = Player.WORLD_LAYER
 	_body.collision_mask = 0
@@ -551,7 +555,7 @@ func _add_item(kind: String, id: Variant, node: Node3D, hit_lo: Vector3, hit_hi:
 func _wall_x(x_out: float, x_in: float, z0: float, z1: float, y0: float, y1: float) -> void:
 	## A piece of a wall across x (the gable ends): red boards outside, pine inside.
 	var mid := (x_out + x_in) * 0.5
-	_box(Vector3(minf(x_out, mid), y0, z0), Vector3(maxf(x_out, mid), y1, z1), RED_PAINT, BOARDS)
+	_box(Vector3(minf(x_out, mid), y0, z0), Vector3(maxf(x_out, mid), y1, z1), _paint, BOARDS)
 	_box(Vector3(minf(x_in, mid), y0, z0), Vector3(maxf(x_in, mid), y1, z1), PINE, BOARDS)
 	_solid(Vector3(minf(x_out, x_in), y0, z0), Vector3(maxf(x_out, x_in), y1, z1))
 
@@ -559,7 +563,7 @@ func _wall_x(x_out: float, x_in: float, z0: float, z1: float, y0: float, y1: flo
 func _wall_z(z_out: float, z_in: float, x0: float, x1: float, y0: float, y1: float) -> void:
 	## A piece of a long wall (north and south).
 	var mid := (z_out + z_in) * 0.5
-	_box(Vector3(x0, y0, minf(z_out, mid)), Vector3(x1, y1, maxf(z_out, mid)), RED_PAINT, BOARDS)
+	_box(Vector3(x0, y0, minf(z_out, mid)), Vector3(x1, y1, maxf(z_out, mid)), _paint, BOARDS)
 	_box(Vector3(x0, y0, minf(z_in, mid)), Vector3(x1, y1, maxf(z_in, mid)), PINE, BOARDS)
 	_solid(Vector3(x0, y0, minf(z_out, z_in)), Vector3(x1, y1, maxf(z_out, z_in)))
 
@@ -586,7 +590,7 @@ func _build_walls() -> void:
 	_wall_x(xo1, X1, Z0, Z1, 0.0, H)
 	# The gables: triangles from the wall tops up to the ridge.
 	var zc := (Z0 + Z1) * 0.5
-	for g in [[xo0, -1.0, RED_PAINT], [X0, 1.0, PINE], [xo1, 1.0, RED_PAINT], [X1, -1.0, PINE]]:
+	for g in [[xo0, -1.0, _paint], [X0, 1.0, PINE], [xo1, 1.0, _paint], [X1, -1.0, PINE]]:
 		var gx: float = g[0]
 		MeshKit.triangle(_st, Vector3(gx, H, zo0), Vector3(gx, H, zo1), Vector3(gx, H + RISE, zc),
 				Vector3(g[1], 0, 0), _k(g[2], BOARDS))
@@ -635,13 +639,13 @@ func _build_roof() -> void:
 		var length := ridge.distance_to(eave) + 0.12
 		var mid := (ridge + eave) * 0.5 - u * 0.06
 		_rbox(mid + n * 0.05, Vector3(xl, 0.1, length), basis, PINE, BOARDS)
-		_rbox(mid + n * 0.125 + u * 0.03, Vector3(xl + 0.06, 0.05, length + 0.06), basis, ROOF, SHINGLES)
+		_rbox(mid + n * 0.125 + u * 0.03, Vector3(xl + 0.06, 0.05, length + 0.06), basis, _roof, SHINGLES)
 		# Bargeboards up the gable ends, and a fascia board along the eave.
 		for bx in [xa - 0.02, xb + 0.02]:
 			_rbox(Vector3(bx, mid.y, mid.z) + n * 0.06, Vector3(0.05, 0.22, length), basis, TRIM, PAINT)
 		var e := eave + n * 0.06 + u * 0.03
 		_box(Vector3(xa - 0.05, e.y - 0.12, e.z - 0.025), Vector3(xb + 0.05, e.y + 0.1, e.z + 0.025), TRIM, PAINT)
-	_box(Vector3(xa - 0.04, H + RISE + 0.08, zc - 0.13), Vector3(xb + 0.04, H + RISE + 0.22, zc + 0.13), ROOF.darkened(0.25), PAINT)
+	_box(Vector3(xa - 0.04, H + RISE + 0.08, zc - 0.13), Vector3(xb + 0.04, H + RISE + 0.22, zc + 0.13), _roof.darkened(0.25), PAINT)
 	# Collision: one prism over the whole roof, down to the eaves. It also
 	# makes the ceiling inside, just above where you can jump.
 	var bottom := H - EAVE * slope
@@ -676,7 +680,7 @@ func _build_door() -> void:
 		var z1 := z0 + leaf
 		var x0 := xo - 0.1
 		var x1 := xo - 0.05
-		_box(Vector3(x0, 0.03, z0), Vector3(x1, DOOR_H - 0.03, z1), RED_PAINT.darkened(0.05), BOARDS, true)
+		_box(Vector3(x0, 0.03, z0), Vector3(x1, DOOR_H - 0.03, z1), _paint.darkened(0.05), BOARDS, true)
 		var fx0 := x0 - 0.02
 		_box(Vector3(fx0, 0.03, z0), Vector3(x0, 0.15, z1), TRIM, PAINT)
 		_box(Vector3(fx0, DOOR_H - 0.15, z0), Vector3(x0, DOOR_H - 0.03, z1), TRIM, PAINT)
@@ -695,7 +699,7 @@ func _build_door() -> void:
 	var welcome := _text("WELCOME", Vector3(8.18, 0.033, (DOOR_Z0 + DOOR_Z1) * 0.5), 0.0, 44, 0.0035, Color(0.38, 0.24, 0.1))
 	welcome.rotation = Vector3(-PI / 2.0, -PI / 2.0, 0.0)   # lying on the mat, read from outside
 	_board(Vector3(xo - 0.07, DOOR_H + 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), 2.1, 0.5, -PI / 2.0)
-	_text("TOOL SHED", Vector3(xo - 0.085, DOOR_H + 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), -PI / 2.0, 80, 0.0042, RED_PAINT.darkened(0.2))
+	_text("TOOL SHED", Vector3(xo - 0.085, DOOR_H + 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), -PI / 2.0, 80, 0.0042, _paint.darkened(0.2))
 
 
 func _build_room() -> void:
