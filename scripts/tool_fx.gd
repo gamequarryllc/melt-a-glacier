@@ -63,10 +63,9 @@ func update(active: bool, from: Vector3, to: Vector3, hit: bool, normal: Vector3
 	## active: the melt button is held. from: the nozzle. to: where it lands
 	## (the ice, or as far as the tool reaches). hit: it's landing on ice.
 	var tool_i: int = GameState.tool_index
-	var gold: bool = GameState.golden_equipped and tool_i == 0
-	var key := "%d/%s/%d/%d" % [tool_i, gold, int(GameState.upgrade_levels.get("nozzle", 0)), int(GameState.upgrade_levels.get("heat", 0))]
+	var key := "%d/%d/%d" % [tool_i, int(GameState.upgrade_levels.get("nozzle", 0)), int(GameState.upgrade_levels.get("heat", 0))]
 	if key != _built:
-		_build(tool_i, gold)
+		_build(tool_i)
 		_built = key
 	_t += delta
 	_on = move_toward(_on, 1.0 if active else 0.0, delta * (8.0 if active else 5.0))
@@ -214,7 +213,7 @@ static func _facing(dir: Vector3) -> Basis:
 # =====================================================================================
 # The looks, one per tool
 # =====================================================================================
-func _build(tool_i: int, gold: bool) -> void:
+func _build(tool_i: int) -> void:
 	for n in get_children():
 		n.queue_free()
 	_streams.clear()
@@ -239,7 +238,7 @@ func _build(tool_i: int, gold: bool) -> void:
 	add_child(_light)
 	match tool_i:
 		0:
-			_build_hair_dryer(gold, heat, hot, more)
+			_build_hair_dryer(heat, hot, more)
 		1:
 			_build_heat_lamp(heat, hot, more)
 		2:
@@ -252,15 +251,12 @@ func _build(tool_i: int, gold: bool) -> void:
 			_build_orbital_mirror(heat, hot, more)
 
 
-func _build_hair_dryer(gold: bool, heat: float, hot: float, more: float) -> void:
+func _build_hair_dryer(heat: float, hot: float, more: float) -> void:
 	_style = {"heat": heat, "light": 0.0}
 	# Hot air, drawn like a cartoon draws wind: brush strokes rushing out along a
 	# widening cone and curling round it. Hotter air blushes from pink to orange.
 	var rim := Color(1.0, 0.5, 0.42).lerp(Color(1.0, 0.4, 0.12), hot)
 	var mid := Color(1.0, 0.96, 0.93).lerp(Color(1.0, 0.92, 0.7), hot)
-	if gold:
-		rim = Color(0.95, 0.62, 0.08)
-		mid = Color(1.0, 0.96, 0.62)
 	# A blush of warm air round them.
 	_add_cone("beam", Color(1.0, 0.8, 0.7), rim, {"r0": 0.05, "width": 0.8, "strength": 0.07 + 0.06 * hot,
 		"soft_edge": 0.6, "fade_in": 0.05, "fade_out": 0.6, "noise_amount": 0.5, "noise_scale": 0.3, "scroll": 5.0})
@@ -268,11 +264,6 @@ func _build_hair_dryer(gold: bool, heat: float, hot: float, more: float) -> void
 		"twist": 0.5, "gap": 1.7, "fill": 0.6, "line": 0.036, "gain": 1.5})
 	_add_wind(mid, rim, {"r0": 0.03, "width": 0.4, "lines": 4.0 + roundf(2.0 * hot), "speed": 7.5 + 3.0 * hot,
 		"twist": -0.7, "gap": 1.4, "fill": 0.55, "line": 0.03, "gain": 1.5})
-	if gold:   # the golden hair dryer blows glitter
-		var glitter := _sparks([Color(1.0, 0.9, 0.4, 1.0), Color(1.0, 0.75, 0.2, 0.9), Color(1.0, 0.7, 0.15, 0.0)], 0.04, 1.6, 26)
-		glitter.initial_velocity_min = 5.0
-		glitter.initial_velocity_max = 7.0
-		_streams.append({"p": glitter, "speed": 6.0, "spread": 0.6})
 	# Snow blown up off the ice where it lands.
 	var flurry := _toon(int(22 * more), false, {"col_core": Color.WHITE, "col_mid": Color.WHITE,
 		"col_edge": Color(0.58, 0.76, 1.0), "lump": 0.45, "erode": 0.9, "band_mid": 0.1, "band_core": 0.2, "gain": 1.3})

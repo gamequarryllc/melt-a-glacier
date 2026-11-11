@@ -22,7 +22,7 @@ const REVENUECAT_KEY_IOS := "appl_vmapbhzARbgVnTaGbsWJKVUBQqA"   # starts with "
 # In RevenueCat, attach the store product of the same name to each entitlement.
 const ENTITLEMENT_TO_PRODUCT := {
 	"remove_ads": "remove_ads_2x",
-	"golden_dryer": "golden_hair_dryer",
+	"helpers_2x": "helpers_2x",
 }
 
 # --- AdMob (ads) -------------------------------------------------------------------------

@@ -91,8 +91,7 @@ func _run() -> void:
 	gs = root.get_node("GameState")
 	gs.wipe_save()
 	gs.owns_remove_ads_2x = false
-	gs.owns_golden_dryer = false
-	gs.golden_equipped = false
+	gs.owns_helpers_2x = false
 	world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	hud = world.hud

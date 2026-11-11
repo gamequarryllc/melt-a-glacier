@@ -72,7 +72,6 @@ var _hilite := -1
 var _refresh_t := 0.0
 var _t := 0.0
 var _figures: Array = []       # [node, type]
-var _shown_gold := false
 var _ice_cubes := {}           # find slot -> MeshInstance3D (still frozen)
 
 
@@ -156,7 +155,7 @@ func describe(it: Dictionary) -> Dictionary:
 		"find":
 			return _describe_find(int(it.id))
 		"catalogue":
-			return {"title": "The Catalogue", "body": "Mail-order extras: free bonuses for a short ad, no ads, the golden hair dryer. (It is also behind the button at the top right.)",
+			return {"title": "The Catalogue", "body": "Mail-order extras: free bonuses for a short ad, no ads, and helpers that work twice as hard. (It is also behind the button at the top right.)",
 				"price": "", "can": true, "action": "OPEN"}
 	return {}
 
@@ -417,9 +416,6 @@ func refresh() -> void:
 				var t: Dictionary = Balance.TOOLS[i]
 				var node: Node3D = it.node
 				node.visible = i != GameState.tool_index
-				if i == 0 and GameState.golden_equipped != _shown_gold:
-					_shown_gold = GameState.golden_equipped
-					(node as MeshInstance3D).mesh = Props.tool_mesh(0, _shown_gold)
 				if i < GameState.tool_index:
 					_set_text(price, "✔ Owned", GREEN_INK)
 				elif i == GameState.tool_index:
@@ -804,7 +800,7 @@ func _build_tools() -> void:
 	_text("TOOLS", Vector3((px0 + px1) * 0.5, 2.55, z + 0.068), 0.0, 72, 0.0034, PAPER)
 	for i in Balance.TOOLS.size():
 		var sx: float = SLOTS[i]
-		var mesh := Props.tool_mesh(i, false)
+		var mesh := Props.tool_mesh(i)
 		var mi := Props.instance(mesh)
 		var size := mesh.get_aabb().size
 		var s := minf(2.0, 0.95 / maxf(size.z, 0.01))

@@ -22,12 +22,14 @@ const PLACEMENT_DOUBLE_WATER := "double_water"
 const PLACEMENT_HELPER_RUSH := "helper_rush"
 
 # Store product ids (create the same ids in Play Console / App Store Connect).
-const PRODUCT_REMOVE_ADS_2X := "remove_ads_2x"      # non-consumable, $2.99
-const PRODUCT_GOLDEN_DRYER := "golden_hair_dryer"   # non-consumable cosmetic, $0.99
+const PRODUCT_REMOVE_ADS_2X := "remove_ads_2x"   # non-consumable, $2.99: no interstitials, your tool melts 2x
+const PRODUCT_HELPERS_2X := "helpers_2x"         # non-consumable, $1.99: helpers work 2x
 
 const PRODUCTS = {
-	PRODUCT_REMOVE_ADS_2X: {"title": "Remove Ads + Permanent 2x", "fallback_price": "$2.99"},
-	PRODUCT_GOLDEN_DRYER: {"title": "Golden Hair Dryer", "fallback_price": "$0.99"},
+	PRODUCT_REMOVE_ADS_2X: {"title": "Remove Ads + 2x Heat", "fallback_price": "$2.99", "icon": "noads",
+		"desc": "No full-screen ads, and your tool melts 2x forever."},
+	PRODUCT_HELPERS_2X: {"title": "2x Helpers", "fallback_price": "$1.99", "icon": "penguin",
+		"desc": "Every helper you hire works 2x, forever."},
 }
 
 var provider: MonetizationProvider
@@ -140,8 +142,8 @@ func owns(product_id: String) -> bool:
 	match product_id:
 		PRODUCT_REMOVE_ADS_2X:
 			return GameState.owns_remove_ads_2x
-		PRODUCT_GOLDEN_DRYER:
-			return GameState.owns_golden_dryer
+		PRODUCT_HELPERS_2X:
+			return GameState.owns_helpers_2x
 	return false
 
 
@@ -169,9 +171,8 @@ func _grant(product_id: String) -> void:
 		PRODUCT_REMOVE_ADS_2X:
 			GameState.owns_remove_ads_2x = true
 			provider.set_ads_removed(true)
-		PRODUCT_GOLDEN_DRYER:
-			GameState.owns_golden_dryer = true
-			GameState.golden_equipped = true
+		PRODUCT_HELPERS_2X:
+			GameState.owns_helpers_2x = true
 	GameState.save_game()
 	GameState.changed.emit()
 	purchases_changed.emit()

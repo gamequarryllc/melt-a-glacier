@@ -24,9 +24,8 @@ var melted_volume: float = 0.0         # m³ of ice melted, all glaciers
 var stage: int = 0                     # which glacier you're melting (index into the level's glaciers)
 var boost_until: float = 0.0
 var helper_rush_until: float = 0.0     # rewarded ad: helpers work 3x until then
-var owns_remove_ads_2x: bool = false   # IAP
-var owns_golden_dryer: bool = false    # IAP (cosmetic)
-var golden_equipped: bool = false
+var owns_remove_ads_2x: bool = false   # IAP: no interstitials, and your tool melts 2x
+var owns_helpers_2x: bool = false      # IAP: helpers work 2x
 var play_time: float = 0.0
 var has_won: bool = false
 var player_pos: Vector3 = Vector3.INF  # INF = use the spawn point
@@ -54,7 +53,7 @@ func _ready() -> void:
 
 func reset_state(keep_purchases: bool = false) -> void:
 	var keep_ads := owns_remove_ads_2x
-	var keep_gold := owns_golden_dryer
+	var keep_helpers := owns_helpers_2x
 	water = 0.0
 	lifetime_water = 0.0
 	tool_index = 0
@@ -75,8 +74,7 @@ func reset_state(keep_purchases: bool = false) -> void:
 	play_time = 0.0
 	has_won = false
 	owns_remove_ads_2x = keep_ads if keep_purchases else false
-	owns_golden_dryer = keep_gold if keep_purchases else false
-	golden_equipped = golden_equipped and owns_golden_dryer
+	owns_helpers_2x = keep_helpers if keep_purchases else false
 	player_pos = Vector3.INF
 	player_yaw = 0.0
 	player_pitch = -0.15
@@ -114,12 +112,8 @@ func upgrade_mult(key: String) -> float:
 
 
 func global_mult() -> float:
-	var m := 1.0
-	if is_boost_active():
-		m *= Balance.BOOST_MULT
-	if owns_remove_ads_2x:
-		m *= Balance.PERMANENT_MULT
-	return m
+	## On everything that melts: your tool and the helpers.
+	return Balance.BOOST_MULT if is_boost_active() else 1.0
 
 
 func tool_def() -> Dictionary:
@@ -127,7 +121,8 @@ func tool_def() -> Dictionary:
 
 
 func tool_power() -> float:
-	return float(tool_def().power) * upgrade_mult("heat") * global_mult() * debug_speed
+	var bought := Balance.PERMANENT_MULT if owns_remove_ads_2x else 1.0
+	return float(tool_def().power) * upgrade_mult("heat") * global_mult() * bought * debug_speed
 
 
 func tool_radius() -> float:
@@ -153,6 +148,8 @@ func sell_mult() -> float:
 func helper_each(i: int) -> float:
 	## hp per second from one helper of type i (or one of Kevin's levels).
 	var m := Balance.HELPER_RUSH_MULT if is_helper_rush_active() else 1.0
+	if owns_helpers_2x:
+		m *= Balance.HELPERS_IAP_MULT
 	return float(Balance.HELPERS[i].power) * global_mult() * m * debug_speed
 
 
@@ -403,8 +400,7 @@ func to_dict() -> Dictionary:
 		"boost_until": boost_until,
 		"helper_rush_until": helper_rush_until,
 		"owns_remove_ads_2x": owns_remove_ads_2x,
-		"owns_golden_dryer": owns_golden_dryer,
-		"golden_equipped": golden_equipped,
+		"owns_helpers_2x": owns_helpers_2x,
 		"play_time": play_time,
 		"has_won": has_won,
 		"player_pos": [player_pos.x, player_pos.y, player_pos.z] if player_pos.is_finite() else [],
@@ -431,8 +427,7 @@ func load_game() -> void:
 		push_warning("Save file unreadable, starting fresh.")
 		return
 	owns_remove_ads_2x = bool(data.get("owns_remove_ads_2x", false))
-	owns_golden_dryer = bool(data.get("owns_golden_dryer", false))
-	golden_equipped = bool(data.get("golden_equipped", false)) and owns_golden_dryer
+	owns_helpers_2x = bool(data.get("owns_helpers_2x", false))
 	if int(data.get("version", 0)) < 4:
 		return   # an older, smaller valley: start the new one fresh, keep purchases
 	water = float(data.get("water", 0.0))

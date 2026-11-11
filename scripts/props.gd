@@ -8,7 +8,6 @@ extends RefCounted
 ## origin, with the grip below the origin (that's how the player holds them).
 ## Bench props stand on y = 0 with their front facing -Z.
 
-const GOLD := Color(1.0, 0.8, 0.25)
 const DARK := Color(0.16, 0.16, 0.19)
 const STEEL := Color(0.72, 0.73, 0.77)
 const BRASS := Color(0.86, 0.66, 0.27)
@@ -19,11 +18,11 @@ const RED := Color(0.85, 0.14, 0.1)
 static var _cache := {}
 
 
-static func tool_mesh(i: int, golden: bool = false) -> ArrayMesh:
+static func tool_mesh(i: int) -> ArrayMesh:
 	## Made in Blender (art/blender/build_tools.py). The parts in the "body"
-	## material take the tool's colour, or gold.
+	## material take the tool's colour.
 	var t := clampi(i, 0, Balance.TOOLS.size() - 1)
-	var col: Color = GOLD if golden and t == 0 else Balance.TOOLS[t].color
+	var col: Color = Balance.TOOLS[t].color
 	return Models.baked("tools", "Tool%d" % t, {"body": col})
 
 
