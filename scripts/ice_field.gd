@@ -189,8 +189,11 @@ func clear_all() -> void:
 
 
 func _height(x: float, z: float, noise: FastNoiseLite, detail: FastNoiseLite) -> float:
-	if spec.get("kind", "tongue") == "dome":
-		return _dome_height(x, z, noise, detail)
+	match str(spec.get("kind", "tongue")):
+		"dome":
+			return _dome_height(x, z, noise, detail)
+		"blobs":
+			return _blobs_height(x, z, noise, detail)
 	## A tongue of ice down the valley: full thickness at the back, sloping
 	## down to a toe at snout_z, with rounded sides.
 	var g: Dictionary = spec
@@ -227,6 +230,33 @@ func _dome_height(x: float, z: float, noise: FastNoiseLite, detail: FastNoiseLit
 	if r2 >= 1.0:
 		return 0.0
 	var shape := pow(1.0 - r2, float(spec.get("edge", 0.5)))
+	var h := float(spec.height) * shape
+	h += noise.get_noise_2d(x * 0.35, z * 0.35 + 500.0) * float(spec.get("hills", 0.0)) * minf(1.0, shape * 1.5)
+	h += noise.get_noise_2d(x, z) * float(spec.bumps) * minf(1.0, shape * 2.0)
+	h += detail.get_noise_2d(x, z) * 0.18 * minf(1.0, shape * 3.0)
+	return maxf(h, 0.0)
+
+
+func _blobs_height(x: float, z: float, noise: FastNoiseLite, detail: FastNoiseLite) -> float:
+	## Rounded lobes of ice run together into one mass (Frozen Harbor): each
+	## is an oval cap like the dome, [x, z, radius x, radius z, height scale],
+	## and where they overlap they blend instead of leaving a crease.
+	var edge := float(spec.get("edge", 0.5))
+	var wobble := float(spec.get("wobble", 0.08))
+	var sum := 0.0
+	var n := 0
+	for b in spec.blobs:
+		var a := atan2((z - float(b[1])) / float(b[3]), (x - float(b[0])) / float(b[2]))
+		var wob := 1.0 + noise.get_noise_2d(cos(a) * 25.0 + 70.0 * n, sin(a) * 25.0 + 300.0) * wobble
+		var ex := (x - float(b[0])) / (float(b[2]) * wob)
+		var ez := (z - float(b[1])) / (float(b[3]) * wob)
+		var r2 := ex * ex + ez * ez
+		n += 1
+		if r2 < 1.0:
+			sum += pow(pow(1.0 - r2, edge) * float(b[4]), 4.0)
+	if sum <= 0.0:
+		return 0.0
+	var shape := pow(sum, 0.25)
 	var h := float(spec.height) * shape
 	h += noise.get_noise_2d(x * 0.35, z * 0.35 + 500.0) * float(spec.get("hills", 0.0)) * minf(1.0, shape * 1.5)
 	h += noise.get_noise_2d(x, z) * float(spec.bumps) * minf(1.0, shape * 2.0)

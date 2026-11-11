@@ -11,7 +11,7 @@ extends SceneTree
 ## its layers from Jade Ice down). "helpers=N" hires at most N penguins and N
 ## sauna crews (the default bot sinks most of its water into hundreds of them,
 ## which few players do), and "nooverdrive" stops Heat Output at level 25, to
-## see what the overdrive levels are worth.
+## see what the overdrive levels are worth. "map=harbor" plays Frozen Harbor.
 ## Variables stay untyped: this compiles before the GameState autoload exists.
 
 const DT := 0.05                 # must match --fixed-fps 20
@@ -37,6 +37,7 @@ var from_finds := 0.0
 var last_report := {"t": 0.0, "tool": 0.0, "finds": 0.0, "all": 0.0}
 var lake_worth := -1.0
 var lake_hp := 1.0
+var map := "valley"
 var max_walkers := -1            # most penguins / sauna crews to hire (-1 = no limit)
 var overdrive := true
 
@@ -52,6 +53,8 @@ func _initialize() -> void:
 			rng.seed = int(a.substr(5))
 		elif a.begins_with("worth="):
 			lake_worth = float(a.substr(6))
+		elif a.begins_with("map="):
+			map = a.substr(4)
 		elif a.begins_with("lakehp="):
 			lake_hp = float(a.substr(7))
 		elif a.begins_with("helpers="):
@@ -90,7 +93,7 @@ static func _work(field) -> float:
 
 func _run() -> void:
 	gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save(map)
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	await process_frame

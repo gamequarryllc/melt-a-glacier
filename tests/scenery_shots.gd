@@ -37,7 +37,7 @@ func _view(player, name: String, eye: Vector3, target: Vector3) -> void:
 
 func _run() -> void:
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	var player = world.player
@@ -78,5 +78,5 @@ func _run() -> void:
 	await _view(player, "s15_lake_shore", Vector3(-14.0, 1.55, 31.0), Vector3(-10.0, 0.0, 38.0))
 	await _view(player, "s16_shore_along", Vector3(6.0, 1.55, 25.5), Vector3(40.0, 0.5, 34.0))
 	await _view(player, "s17_back_to_village", Vector3(2.0, 1.55, 26.0), Vector3(0.0, 6.0, -20.0))
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	quit(0)

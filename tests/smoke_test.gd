@@ -53,7 +53,7 @@ func _aim_at(player, target: Vector3) -> void:
 
 func _run() -> void:
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	await _frames(3)
@@ -638,8 +638,9 @@ func _run() -> void:
 			if c.find_child("Stamp", true, false) != null:
 				soon += 1
 		check(menu.has_signal("closed") and menu.cards.size() == Levels.MAPS.size()
-			and menu.cards[0].find_child("Play", true, false) != null and soon == Levels.MAPS.size() - 1,
-			"a new glacier opens the level menu: the valley again, and %d coming soon" % soon)
+			and menu.cards[0].find_child("Play", true, false) != null and menu.cards[1].find_child("Play", true, false) != null
+			and soon == Levels.MAPS.size() - 2,
+			"a new glacier opens the level menu: the valley again, Frozen Harbor unlocked, and %d coming soon" % soon)
 		menu.close()
 		await _frames(2)
 		check(world.hud.popups.get_child_count() == 0 and player.input_enabled, "closing the level menu goes back to the valley")
@@ -656,7 +657,7 @@ func _run() -> void:
 		"glaciers stored in the save (%d KB)" % (str(gs.glacier_saves[1]).length() / 1024))
 
 	# --- Start over: a fresh valley.
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	world.queue_free()
 	await _frames(2)
 	var world2 = load("res://scenes/world.tscn").instantiate()
@@ -664,7 +665,74 @@ func _run() -> void:
 	await _frames(3)
 	check(gs.grid.remaining == gs.grid.total and not gs.has_won, "start over gives a full glacier")
 	await _frames(20)
-	gs.wipe_save()
+
+	# --- Frozen Harbor: the second map. What you've bought comes with you.
+	gs.owns_remove_ads_2x = true
+	gs.owns_helpers_2x = true
+	gs.wipe_save("harbor")
+	world2.queue_free()
+	await _frames(2)
+	var world3 = load("res://scenes/world.tscn").instantiate()
+	root.add_child(world3)
+	await _frames(3)
+	check(gs.map == "harbor" and gs.maps_won.has("valley"), "Frozen Harbor starts, and the valley stays won")
+	var paid3: float = gs.tool_power()
+	gs.owns_remove_ads_2x = false
+	var plain3: float = gs.tool_power()
+	gs.owns_remove_ads_2x = true
+	var crew3: float = gs.helper_each(0)
+	gs.owns_helpers_2x = false
+	var crew3_plain: float = gs.helper_each(0)
+	gs.owns_helpers_2x = true
+	check(is_equal_approx(paid3, plain3 * Balance.PERMANENT_MULT)
+		and is_equal_approx(crew3, crew3_plain * Balance.HELPERS_IAP_MULT),
+		"purchases made in the valley still count in the harbour (x%.0f heat, x%.0f helpers)" % [paid3 / plain3, crew3 / crew3_plain])
+	check(Balance.TOOLS[0].name == "Orbital Mirror" and gs.tool_index == 0 and Balance.TOOLS.size() == 6,
+		"the harbour starts with the Orbital Mirror, and 5 new tools to buy")
+	check(world3._find_markers.size() == Balance.DISCOVERIES.size() and Balance.DISCOVERIES.size() == 14,
+		"all %d harbour finds placed" % world3._find_markers.size())
+	check(world3.fleet.ships.size() == 5 and gs.grids.size() == 2 and gs.grids[0].layers[0].name == "Sea Snow",
+		"the harbour glacier, the frozen bay and the 5 fishing boats in them")
+	check(gs.helper_cost(0) > 1000.0 * float(Balance.BASE_HELPERS[0].base), "harbour prices are scaled up")
+	var heat3: Dictionary = Balance.UPGRADES[0]
+	check(heat3.key == "heat" and int(heat3.max) == 35 and heat3.has("over_from")
+		and float(heat3.base) > 1000.0 * float(Balance.BASE_UPGRADES[0].base),
+		"the harbour has Heat Output overdrive too, at harbour prices")
+	# It's a map of its own: a quay on the open sea, not the valley again.
+	var p3 = gs.player
+	var hv: Dictionary = world3.level.valley
+	var gate3: Vector2 = hv.gate
+	check(Coast.is_coast(world3.level) and world3.town != null and world3.town.carve.size() >= 9,
+		"the harbour is a coast with its own town (%d cabins under the ice)" % world3.town.carve.size())
+	check(p3.position.distance_to(world3.spawn) < 1.0 and world3.walkable(world3.spawn.x, world3.spawn.z)
+		and not world3.walkable(world3.spawn.x, gate3.y + 6.0) and not world3.walkable(gate3.x, gate3.y + 3.0),
+		"you start on the quay, and the sea and the pier are closed")
+	var buried := 0
+	for box in world3.town.carve:
+		var mid: Vector3 = (box as AABB).get_center()
+		if gs.grid.original_top(mid.x, mid.z) > (box as AABB).end.y + 0.5:
+			buried += 1
+	check(buried == world3.town.carve.size(), "every cabin is under the ice (%d of %d)" % [buried, world3.town.carve.size()])
+	gs.stage = 1
+	check(world3.walkable(gate3.x, gate3.y + 3.0) and world3.walkable(gate3.x, gate3.y + 30.0)
+		and not world3.walkable(gate3.x, gate3.y + 200.0),
+		"once the harbour is free the pier leads out onto the bay, as far as the breakwater")
+	gs.stage = 0
+	p3.position = Vector3(-8.0, 0.0, -4.0)
+	p3.set_view(PI * 0.5, 0.25)
+	p3.unstick()
+	var before3: float = gs.grid.volume_left()
+	world3.force_melt = true
+	for tool_i in Balance.TOOLS.size():
+		gs.tool_index = tool_i
+		await _frames(25)
+	world3.force_melt = false
+	check(gs.grid.volume_left() < before3, "every harbour tool melts (%.0f m3 gone)" % (before3 - gs.grid.volume_left()))
+	gs.wipe_save("valley")
+	check(gs.map == "valley" and gs.owns_remove_ads_2x and gs.owns_helpers_2x, "and they're still yours back in the valley")
+	gs.owns_remove_ads_2x = false
+	gs.owns_helpers_2x = false
+	gs.wipe_save("valley")
 	print("SMOKE TEST ", "PASSED" if ok else "FAILED")
 	quit(0 if ok else 1)
 

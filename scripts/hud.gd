@@ -587,7 +587,7 @@ func _refresh() -> void:
 	var left := grid.fraction_left() if grid != null else 1.0
 	ice_bar.value = 1.0 - left
 	if GameState.has_won:
-		ice_label.text = "Summer is back!"
+		ice_label.text = Levels.story("done_label")
 		ice_pct.text = ""
 	else:
 		ice_label.text = str(grid.spec.get("title", "Glacier")) if grid != null else "Glacier"
@@ -1379,9 +1379,9 @@ func show_stage_done(stage: int) -> void:
 	if catalogue_open:
 		close_catalogue()
 	var next: String = str(GameState.grids[stage].spec.get("name", "the next glacier")) if stage < GameState.grids.size() else "the next glacier"
-	var body := "Everyone's home again, and your helpers have earned a holiday: they're partying in the village square.\n\nBut look past the fence. The whole lake froze solid, and the gate is open now.\nHire a new crew at the shed and go melt %s!" % next
-	var p := _popup("The village is free!", body)
-	_popup_button(p, "To the lake!", Color(0.25, 0.5, 0.85), func(): _close_popup(p))
+	var body := Levels.story("stage_body") % next
+	var p := _popup(Levels.story("stage_title"), body)
+	_popup_button(p, Levels.story("stage_button"), Color(0.25, 0.5, 0.85), func(): _close_popup(p))
 
 
 func show_ending() -> void:
@@ -1394,7 +1394,7 @@ func show_ending() -> void:
 	for d in GameState.discovered:
 		if d:
 			found += 1
-	var p := _popup("The End", "The last chunk dripped away and the lake is free.\nSummer is back!")
+	var p := _popup("The End", Levels.story("ending"))
 	# The run in numbers, like a score sheet.
 	var sheet := GridContainer.new()
 	sheet.columns = 3
@@ -1421,7 +1421,7 @@ func show_ending() -> void:
 	tip.text = "(Screenshot this!)"
 	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	p.box.add_child(tip)
-	_popup_button(p, "Walk around the village", Color(0.36, 0.6, 0.86), func(): _close_popup(p))
+	_popup_button(p, Levels.story("walk"), Color(0.36, 0.6, 0.86), func(): _close_popup(p))
 	_popup_button(p, "Melt a new glacier", Color(0.95, 0.55, 0.2), func():
 		_close_popup(p)
 		show_levels())

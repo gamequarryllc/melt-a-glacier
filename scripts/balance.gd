@@ -35,6 +35,33 @@ const LAYER_SETS = {
 		{"name": "Starlight Ice", "hp": 26000.0, "color": Color(0.42, 0.22, 0.62)},
 		{"name": "The Lake's Heart", "hp": 60000.0, "color": Color(0.62, 0.2, 0.5)},
 	],
+	# Frozen Harbor: sea ice, salty and green near the top, then deep-sea blues.
+	"harbor": [
+		{"name": "Sea Snow", "hp": 6160.0, "color": Color(0.9, 0.96, 0.98)},
+		{"name": "Salty Firn", "hp": 15400.0, "color": Color(0.78, 0.93, 0.95)},
+		{"name": "Brine Slush", "hp": 36960.0, "color": Color(0.62, 0.88, 0.9)},
+		{"name": "Seaglass Ice", "hp": 92400.0, "color": Color(0.48, 0.84, 0.8)},
+		{"name": "Kelp Ice", "hp": 246400.0, "color": Color(0.36, 0.7, 0.6)},
+		{"name": "Deep Harbour Ice", "hp": 616000.0, "color": Color(0.24, 0.55, 0.66)},
+		{"name": "Whale-Song Ice", "hp": 1540000.0, "color": Color(0.2, 0.42, 0.7)},
+		{"name": "Kraken Ice", "hp": 2464000.0, "color": Color(0.22, 0.3, 0.62)},
+		{"name": "Shipwreck Ice", "hp": 5420800.0, "color": Color(0.18, 0.22, 0.48)},
+		{"name": "The Old Anchor", "hp": 12320000.0, "color": Color(0.14, 0.16, 0.36)},
+	],
+	# ...and the bay, frozen under the northern lights: the deeper you go the
+	# stranger the colours get.
+	"bay": [
+		{"name": "Pack Ice", "hp": 67200.0, "color": Color(0.92, 0.97, 1.0)},
+		{"name": "Sea Frost", "hp": 201600.0, "color": Color(0.82, 0.95, 1.0)},
+		{"name": "Iceberg Blue", "hp": 604800.0, "color": Color(0.55, 0.82, 0.98)},
+		{"name": "Narwhal Ice", "hp": 1680000.0, "color": Color(0.42, 0.74, 0.92)},
+		{"name": "Aurora Ice", "hp": 3292800.0, "color": Color(0.36, 0.88, 0.62)},
+		{"name": "Abyss Ice", "hp": 7056000.0, "color": Color(0.14, 0.3, 0.42)},
+		{"name": "Pearl Ice", "hp": 21168000.0, "color": Color(0.9, 0.82, 0.92)},
+		{"name": "Leviathan Ice", "hp": 51744000.0, "color": Color(0.46, 0.22, 0.6)},
+		{"name": "Moon-Tide Ice", "hp": 122304000.0, "color": Color(0.82, 0.3, 0.7)},
+		{"name": "The Ocean's Heart", "hp": 282240000.0, "color": Color(0.95, 0.42, 0.3)},
+	],
 }
 
 # --- Player -------------------------------------------------------------------------
@@ -53,19 +80,42 @@ const JET_CEILING := 24.0        # can't fly higher than this
 
 # --- Tools (bought in order at the shed) ------------------------------------------------
 # power: hp per second at the centre of the heat zone; radius / range in metres.
-const TOOLS = [
-	{"name": "Hair Dryer", "icon": "💨", "power": 2.0, "radius": 0.9, "range": 4.5, "cost": 0.0,
+const VALLEY_TOOLS = [
+	{"name": "Hair Dryer", "fx": "hair_dryer", "model": "Tool0", "icon": "💨", "power": 2.0, "radius": 0.9, "range": 4.5, "cost": 0.0,
 		"color": Color(0.95, 0.5, 0.7), "desc": "Borrowed from your aunt."},
-	{"name": "Heat Lamp", "icon": "💡", "power": 6.0, "radius": 1.15, "range": 5.5, "cost": 120.0,
+	{"name": "Heat Lamp", "fx": "heat_lamp", "model": "Tool1", "icon": "💡", "power": 6.0, "radius": 1.15, "range": 5.5, "cost": 120.0,
 		"color": Color(1.0, 0.82, 0.3), "desc": "Keeps fries and glaciers warm."},
-	{"name": "Blowtorch", "icon": "🔥", "power": 18.0, "radius": 1.4, "range": 6.5, "cost": 4000.0,
+	{"name": "Blowtorch", "fx": "blowtorch", "model": "Tool2", "icon": "🔥", "power": 18.0, "radius": 1.4, "range": 6.5, "cost": 4000.0,
 		"color": Color(0.35, 0.55, 0.95), "desc": "Crème brûlée, but it's a glacier."},
-	{"name": "Flamethrower", "icon": "🐉", "power": 55.0, "radius": 1.8, "range": 9.0, "cost": 100000.0,
+	{"name": "Flamethrower", "fx": "flamethrower", "model": "Tool3", "icon": "🐉", "power": 55.0, "radius": 1.8, "range": 9.0, "cost": 100000.0,
 		"color": Color(0.9, 0.35, 0.15), "desc": "Probably needs a permit."},
-	{"name": "Lava Hose", "icon": "🌋", "power": 160.0, "radius": 2.3, "range": 11.0, "cost": 3000000.0,
+	{"name": "Lava Hose", "fx": "lava_hose", "model": "Tool4", "icon": "🌋", "power": 160.0, "radius": 2.3, "range": 11.0, "cost": 3000000.0,
 		"color": Color(0.85, 0.2, 0.1), "desc": "Garden hose, but lava."},
-	{"name": "Orbital Mirror", "icon": "🛰️", "power": 450.0, "radius": 3.2, "range": 45.0, "cost": 30000000.0,
+	{"name": "Orbital Mirror", "fx": "orbital_mirror", "model": "Tool5", "icon": "🛰️", "power": 450.0, "radius": 3.2, "range": 45.0, "cost": 30000000.0,
 		"color": Color(0.85, 0.9, 1.0), "desc": "A magnifying glass in space."},
+]
+
+# Frozen Harbor's tools. You start with the Orbital Mirror you finished the
+# valley with, and every tool after it is sillier and stronger than the last.
+# Their heat zones hardly grow (they start big), so the power has to grow
+# faster than the valley's: each tool melts about 4-5x as much as the one
+# before, like in the valley. The Orbital Mirror melts about 2800x as much as
+# the hair dryer; prices, ice and finds are about 6200x the valley's, and the
+# bay's ice another 1.1x on top, so the harbour lasts longer than the valley
+# (see Balance.MAPS and tests/pacing.gd map=harbor).
+const HARBOR_TOOLS = [
+	{"name": "Orbital Mirror", "fx": "orbital_mirror", "model": "Tool5", "icon": "🛰️", "power": 450.0, "radius": 3.2, "range": 45.0,
+		"cost": 0.0, "color": Color(0.85, 0.9, 1.0), "desc": "You brought it from the valley."},
+	{"name": "Dragon Puppet", "fx": "dragon_puppet", "model": "Tool6", "icon": "🐲", "power": 2000.0, "radius": 3.4, "range": 34.0,
+		"cost": 739200.0, "color": Color(0.3, 0.72, 0.36), "desc": "A sock puppet. A real dragon. Don't ask."},
+	{"name": "Lightning Rod", "fx": "lightning_rod", "model": "Tool7", "icon": "⚡", "power": 7500.0, "radius": 3.6, "range": 50.0,
+		"cost": 24640000.0, "color": Color(0.32, 0.45, 0.95), "desc": "Calls down a storm. Wear rubber boots."},
+	{"name": "Meteor Remote", "fx": "meteor_remote", "model": "Tool8", "icon": "☄️", "power": 33000.0, "radius": 3.9, "range": 60.0,
+		"cost": 616000000.0, "color": Color(0.95, 0.45, 0.15), "desc": "One button. Many meteors. No refunds."},
+	{"name": "Pocket Sun", "fx": "pocket_sun", "model": "Tool9", "icon": "☀️", "power": 135000.0, "radius": 4.2, "range": 55.0,
+		"cost": 12320000000.0, "color": Color(1.0, 0.75, 0.15), "desc": "A whole star in a lantern. Mind your eyebrows."},
+	{"name": "Supernova in a Jar", "fx": "supernova_jar", "model": "Tool10", "icon": "🌌", "power": 600000.0, "radius": 4.6, "range": 70.0,
+		"cost": 135520000000.0, "color": Color(0.7, 0.35, 0.95), "desc": "Shake well. Point away from face."},
 ]
 
 # Shed upgrades. Effect = 1 + per_level * level. Cost = base * growth^level.
@@ -76,7 +126,7 @@ const TOOLS = [
 # and the ice is at its hardest (Alex: the end dragged with nothing left to
 # buy). Income grows about as fast as their price, so there's another one to
 # buy every couple of minutes until the lake is free.
-const UPGRADES = [
+const BASE_UPGRADES = [
 	{"key": "heat", "name": "Heat Output", "icon": "🌡️", "base": 25.0, "growth": 1.85, "per_level": 0.25, "max": 35,
 		"over_from": 25, "over_mult": 1.3, "over_growth": 1.5,
 		"desc": "+25% melting power", "over_desc": "Overdrive! x1.3 melting power"},
@@ -99,7 +149,7 @@ const UPGRADES = [
 # goes up a level (to max_level) and throws bigger lava bombs, more often.
 # Every level adds `power`, so the count in GameState.helper_counts is his level.
 const HELPER_GROWTH := 1.2
-const HELPERS = [
+const BASE_HELPERS = [
 	{"key": "penguin", "name": "Penguin with Tiny Torch", "icon": "🐧", "power": 0.5, "base": 30.0,
 		"desc": "Waddles around melting the surface."},
 	{"key": "sauna", "name": "Sauna Crew", "icon": "🧖", "power": 6.0, "base": 600.0,
@@ -125,7 +175,7 @@ const RARITIES = [
 # village glacier, 1 = the frozen lake). Each sells for a burst of meltwater.
 # rarity: an index into RARITIES. model: which model in models/finds.glb
 # (FindN, see World.find_mesh) when it isn't the same number as the find.
-const DISCOVERIES = [
+const VALLEY_DISCOVERIES = [
 	{"name": "Lost Mitten", "icon": "🧤", "glacier": 0, "layer": 1, "rarity": 0, "value": 30.0, "flavor": "Still damp. Somehow."},
 	{"name": "Frozen Pizza", "icon": "🍕", "glacier": 0, "layer": 2, "rarity": 0, "value": 150.0, "flavor": "Best before 1987."},
 	{"name": "Mixtape", "icon": "📼", "glacier": 0, "layer": 2, "rarity": 1, "value": 200.0, "flavor": "Side B is all whale songs."},
@@ -144,6 +194,25 @@ const DISCOVERIES = [
 	{"name": "Lake Monster", "icon": "🦕", "glacier": 1, "layer": 6, "rarity": 3, "value": 500000.0, "flavor": "Real. Shy. Would like a towel."},
 	{"name": "Crashed UFO", "icon": "🛸", "glacier": 1, "layer": 8, "rarity": 4, "value": 3000000.0, "flavor": "They came for the ice. They stayed."},
 	{"name": "The Sun's Lost Ray", "icon": "🌟", "glacier": 1, "layer": 9, "rarity": 4, "value": 8000000.0, "flavor": "So that's where summer went."},
+]
+
+# Frozen Harbor's finds: 0 = the harbour town's glacier, 1 = the frozen bay.
+# model: FindN in models/finds.glb (the harbour's are Find18 on).
+const HARBOR_DISCOVERIES = [
+	{"name": "Rubber Duck Captain", "icon": "🦆", "glacier": 0, "layer": 1, "model": 18, "rarity": 0, "value": 185000.0, "flavor": "Still on duty. Still squeaks."},
+	{"name": "Lobster in a Bow Tie", "icon": "🦞", "glacier": 0, "layer": 2, "model": 19, "rarity": 1, "value": 1100000.0, "flavor": "Dressed for a party in 1904."},
+	{"name": "Diving Helmet", "icon": "🤿", "glacier": 0, "layer": 3, "model": 20, "rarity": 1, "value": 4180000.0, "flavor": "Someone's humming in there."},
+	{"name": "Treasure Map", "icon": "🗺️", "glacier": 0, "layer": 4, "model": 21, "rarity": 2, "value": 12320000.0, "flavor": "X marks this exact glacier."},
+	{"name": "Mermaid's Guitar", "icon": "🎸", "glacier": 0, "layer": 5, "model": 22, "rarity": 2, "value": 26400000.0, "flavor": "Only plays sea shanties."},
+	{"name": "Robot Seagull", "icon": "🤖", "glacier": 0, "layer": 6, "model": 23, "rarity": 3, "value": 61600000.0, "flavor": "Steals chips. Very efficiently."},
+	{"name": "Frozen Narwhal", "icon": "🦄", "glacier": 0, "layer": 7, "model": 24, "rarity": 3, "value": 123200000.0, "flavor": "The unicorn of the sea. Grumpy."},
+	{"name": "Golden Anchor", "icon": "⚓", "glacier": 0, "layer": 9, "model": 25, "rarity": 4, "value": 418000000.0, "flavor": "It held the whole harbour still."},
+	{"name": "Pirate Parrot", "icon": "🦜", "glacier": 1, "layer": 1, "model": 26, "rarity": 1, "value": 48400000.0, "flavor": "Says 'cold' in nine languages."},
+	{"name": "Yellow Submarine", "icon": "🟡", "glacier": 1, "layer": 3, "model": 27, "rarity": 2, "value": 484000000.0, "flavor": "Periscope up. Crew asleep."},
+	{"name": "Giant Pearl", "icon": "🦪", "glacier": 1, "layer": 4, "model": 28, "rarity": 3, "value": 990000000.0, "flavor": "The oyster is fine. Just tired."},
+	{"name": "The Kraken", "icon": "🦑", "glacier": 1, "layer": 6, "model": 29, "rarity": 3, "value": 3080000000.0, "flavor": "Eight arms, all waving hello."},
+	{"name": "Mermaid Throne", "icon": "🔱", "glacier": 1, "layer": 8, "model": 30, "rarity": 4, "value": 18480000000.0, "flavor": "The queen went out for snacks."},
+	{"name": "A Frozen Comet", "icon": "☄️", "glacier": 1, "layer": 9, "model": 31, "rarity": 4, "value": 48400000000.0, "flavor": "Fell in the sea. Still fizzing."},
 ]
 
 # --- Boosts, ads -----------------------------------------------------------------------
@@ -175,6 +244,48 @@ const AD_REWARDS = {
 	"heat_rush": {"icon": "🔥", "title": "2x heat for 5 min", "placement": "boost_2x_heat"},
 	"helper_rush": {"icon": "🐧", "title": "Helpers work 3x for 3 min", "placement": "helper_rush"},
 }
+
+
+# --- Maps ----------------------------------------------------------------------------
+# What changes from one map to the next (see Levels for each map's shape).
+# Upgrades and helpers are the same on every map, with prices times `scale`
+# and helpers' power times `helper_power`. Frozen Harbor: its tools melt about
+# 2800x as much as the valley's, so helpers do too, and everything costs about
+# 6200x as much, so it takes a good while longer (tests/pacing.gd map=harbor).
+const MAPS = {
+	"valley": {"tools": VALLEY_TOOLS, "finds": VALLEY_DISCOVERIES, "scale": 1.0},
+	"harbor": {"tools": HARBOR_TOOLS, "finds": HARBOR_DISCOVERIES, "scale": 6200.0, "helper_power": 2800.0},
+}
+
+# The map being played (Levels.use() sets them): GameState, the shed and the
+# HUD read these as if they were plain constants.
+static var map := "valley"
+static var scale := 1.0
+static var TOOLS: Array = VALLEY_TOOLS
+static var DISCOVERIES: Array = VALLEY_DISCOVERIES
+static var UPGRADES: Array = BASE_UPGRADES
+static var HELPERS: Array = BASE_HELPERS
+
+
+static func use_map(key: String) -> void:
+	if not MAPS.has(key):
+		key = "valley"
+	var m: Dictionary = MAPS[key]
+	map = key
+	scale = float(m.scale)
+	TOOLS = m.tools
+	DISCOVERIES = m.finds
+	UPGRADES = []
+	for u in BASE_UPGRADES:
+		var c: Dictionary = u.duplicate()
+		c.base = float(u.base) * scale
+		UPGRADES.append(c)
+	HELPERS = []
+	for h in BASE_HELPERS:
+		var c: Dictionary = h.duplicate()
+		c.base = float(h.base) * scale
+		c.power = float(h.power) * float(m.get("helper_power", scale))
+		HELPERS.append(c)
 
 
 static func rarity(d: int) -> Dictionary:

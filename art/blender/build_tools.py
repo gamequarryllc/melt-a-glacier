@@ -1,5 +1,6 @@
 """The six heat tools, held in your hand and hung on the shed's tool wall.
-Writes models/tools.glb: Tool0 (hair dryer) .. Tool5 (orbital mirror remote).
+Writes models/tools.glb: Tool0 (hair dryer) .. Tool5 (orbital mirror remote), then
+Frozen Harbor's Tool6 (dragon puppet) .. Tool10 (supernova in a jar).
 
 Same frame as the old code models: the business end points along -Z, about
 0.25 m in front of the origin, with the grip below the origin. Parts in the
@@ -192,10 +193,182 @@ def mirror_remote():
     return o
 
 
+# ---- Frozen Harbor's tools (Tool6 .. Tool10), each sillier than the last ----
+
+def dragon_puppet():
+    """A sock-puppet dragon on your hand, mouth open, breathing fire."""
+    o = []
+    b = body()
+    belly = m("puppet_belly", (0.95, 0.85, 0.45), 0.9)
+    felt = m("puppet_felt", (0.62, 0.3, 0.86), 0.9)
+    mouth = m("puppet_mouth", (0.75, 0.15, 0.2), 0.9)
+    white = m("googly_white", WHITE, 0.3)
+    ink = m("googly_ink", (0.05, 0.05, 0.06), 0.3)
+    # The sleeve, up your arm.
+    o.append(along_z(smooth_profile([(0.0, 0.0), (0.06, 0.0), (0.062, 0.12), (0.058, 0.2), (0.0, 0.2)], 2), 0.25, b, 18, y=-0.02))
+    o.append(along_z([(0.064, 0.0), (0.064, 0.02), (0.0, 0.021)], 0.23, felt, 18, smooth=False))   # cuff
+    # Upper jaw (the head), tilted up, and the lower jaw, tilted down: the mouth's open.
+    up = sphere((0, 0.0, 0.0), (0.07, 0.055, 0.16), b, 18, 10)
+    transform(up, rot_x(0.28), (0, 0.025, -0.07))
+    o.append(up)
+    lo = sphere((0, 0.0, 0.0), (0.062, 0.03, 0.14), belly, 16, 8)
+    transform(lo, rot_x(-0.32), (0, -0.04, -0.06))
+    o.append(lo)
+    inside = sphere((0, 0.0, 0.0), (0.055, 0.03, 0.12), mouth, 14, 8)
+    transform(inside, rot_x(-0.02), (0, -0.01, -0.09))
+    o.append(inside)
+    # Felt teeth along both jaws.
+    for k in range(5):
+        x = -0.04 + k * 0.02
+        o.append(cyl((x, 0.01, -0.2 + abs(x) * 0.6), (x, -0.012, -0.2 + abs(x) * 0.6), 0.008, 0.0, white, 5))
+    # Nostrils, googly eyes on stalks, horns and a row of spikes down the back.
+    for s in (-1, 1):
+        o.append(sphere((s * 0.025, 0.07, -0.21), (0.009, 0.007, 0.006), ink, 6, 4))
+        o.append(sphere((s * 0.04, 0.11, -0.05), (0.03, 0.03, 0.02), white, 12, 8))
+        o.append(sphere((s * 0.042, 0.112, -0.069), (0.014, 0.014, 0.006), ink, 8, 5))
+        o.append(cyl((s * 0.04, 0.12, 0.0), (s * 0.06, 0.18, 0.04), 0.012, 0.0, felt, 6))
+    for k in range(5):
+        z = 0.0 + k * 0.05
+        o.append(cyl((0, 0.07 - k * 0.008, z), (0, 0.11 - k * 0.012, z + 0.02), 0.016, 0.0, felt, 6))
+    return o
+
+
+def lightning_rod():
+    """A copper rod on an insulated grip, with a spark ball at the tip."""
+    o = []
+    b = body()
+    copper = m("copper", (0.86, 0.48, 0.25), 0.3, 0.9)
+    rubber = m("rubber", (0.12, 0.12, 0.13), 0.8)
+    spark = m("spark_ball", (0.6, 0.85, 1.0), 0.2, 0.0, (0.4, 0.7, 1.0))
+    o.append(cyl((0, 0, 0.2), (0, 0, -0.04), 0.024, 0.024, rubber, 12))
+    for k in range(4):   # stacked insulator discs (the tool's colour)
+        z = -0.04 - k * 0.028
+        o.append(cyl((0, 0, z), (0, 0, z - 0.018), 0.05 - k * 0.006, 0.04 - k * 0.006, b, 16))
+    o.append(cyl((0, 0, -0.12), (0, 0, -0.26), 0.009, 0.004, copper, 8))
+    # A copper coil wound round the rod.
+    prev = None
+    for k in range(25):
+        t = k / 24
+        a = t * math.tau * 5
+        p = Vector((math.cos(a) * 0.016, math.sin(a) * 0.016, -0.13 - t * 0.09))
+        if prev is not None:
+            o.append(cyl(prev, p, 0.003, 0.003, copper, 4))
+        prev = p
+    o.append(sphere((0, 0, -0.27), (0.022, 0.022, 0.022), spark, 12, 8))
+    # Little forks of lightning frozen round the ball.
+    for k in range(4):
+        a = k * math.pi / 2 + 0.4
+        q = Vector((math.cos(a) * 0.05, math.sin(a) * 0.05, -0.28))
+        mid = Vector((math.cos(a + 0.5) * 0.03, math.sin(a + 0.5) * 0.03, -0.27))
+        o.append(cyl((0, 0, -0.27), mid, 0.003, 0.003, spark, 4))
+        o.append(cyl(mid, q, 0.003, 0.002, spark, 4))
+    # A rubber glove guard and a red switch.
+    o.append(cyl((0, 0, 0.0), (0, 0, -0.012), 0.045, 0.045, rubber, 16))
+    o.append(box((0, 0.026, 0.06), (0.02, 0.01, 0.03), m("knob", RED, 0.4), None, 0.004))
+    return o
+
+
+def meteor_remote():
+    """A chunky remote: a big red button under a flip-up cover, an antenna, and
+    a little meteor kept in a glass dome on top."""
+    o = []
+    b = body()
+    dark = m("dark", DARK, 0.5)
+    steel = m("steel", STEEL, 0.25, 0.9)
+    o.append(box((0, -0.025, 0.0), (0.11, 0.055, 0.24), b, None, 0.022))
+    o.append(box((0, -0.045, 0.0), (0.114, 0.02, 0.244), dark, None, 0.008))
+    o.append(cyl((0, 0.0, -0.05), (0, 0.022, -0.05), 0.03, 0.03, m("button_red", RED, 0.3), 16, smooth=False))
+    cover = box((0, 0.0, 0.0), (0.075, 0.004, 0.075), m("cover_glass", (0.7, 0.85, 0.95), 0.1), None, 0.0)
+    transform(cover, rot_x(-1.1), (0, 0.04, -0.01))
+    o.append(cover)
+    for k in range(5):   # hazard stripes round the button
+        o.append(box((-0.04 + k * 0.02, 0.003, -0.095), (0.01, 0.003, 0.012), m("hazard", (1.0, 0.85, 0.2), 0.5), rot_y(0.5), 0.0))
+    # The dome with a glowing rock in it.
+    o.append(cyl((0, 0.0, 0.065), (0, 0.012, 0.065), 0.04, 0.04, steel, 16))
+    o.append(sphere((0, 0.035, 0.065), (0.022, 0.02, 0.022), m("meteor_rock", (0.3, 0.24, 0.22), 0.9), 8, 5))
+    o.append(sphere((0.008, 0.03, 0.058), (0.012, 0.01, 0.01), m("meteor_glow", (1.0, 0.5, 0.15), 0.3, 0.0, (1.0, 0.4, 0.05)), 6, 4))
+    o.append(sphere((0, 0.012, 0.065), (0.038, 0.045, 0.038), m("dome_glass", (0.8, 0.9, 1.0), 0.05), 14, 8))
+    # Antenna with a ball on the end.
+    o.append(cyl((0.04, 0.0, -0.1), (0.05, 0.15, -0.16), 0.005, 0.003, steel, 6))
+    o.append(sphere((0.05, 0.15, -0.16), (0.012, 0.012, 0.012), m("button_red", RED, 0.3), 6, 4))
+    return o
+
+
+def pocket_sun():
+    """A brass lantern with a tiny sun burning inside, its front window open."""
+    o = []
+    b = body()
+    brass = m("brass", BRASS, 0.3, 0.85)
+    glass = m("lantern_glass", (1.0, 0.93, 0.7), 0.1)
+    sun = m("sun_core", (1.0, 0.78, 0.25), 0.3, 0.0, (1.0, 0.65, 0.15))
+    # Frame: top and bottom plates and four posts, painted the tool's colour.
+    for y in (-0.08, 0.08):
+        o.append(box((0, y, -0.08), (0.13, 0.016, 0.13), b, None, 0.006))
+    for x in (-0.06, 0.06):
+        for z in (-0.14, -0.02):
+            o.append(cyl((x, -0.08, z), (x, 0.08, z), 0.006, 0.006, brass, 6))
+    for s in (-1, 1):   # glass side panes
+        o.append(box((s * 0.06, 0.0, -0.08), (0.004, 0.15, 0.11), glass, None, 0.0))
+    o.append(box((0, 0.0, -0.02), (0.11, 0.15, 0.004), glass, None, 0.0))
+    o.append(sphere((0, 0.0, -0.08), (0.042, 0.042, 0.042), sun, 16, 10))
+    for k in range(8):   # flares round the little sun
+        a = math.tau * k / 8
+        o.append(cyl((math.cos(a) * 0.04, math.sin(a) * 0.04, -0.08), (math.cos(a) * 0.058, math.sin(a) * 0.058, -0.08), 0.01, 0.0, sun, 5))
+    # A pointed roof with a ring on top, and a grip underneath.
+    o.append(lathe([(0.0, 0.0), (0.09, 0.0), (0.0, 0.06)], brass, 4, center=(0, 0.088, -0.08)))
+    o.append(torus((0, 0.165, -0.08), 0.02, 0.005, brass, 12, 4))
+    o.append(cyl((0, -0.09, -0.06), (0, -0.21, -0.02), 0.022, 0.02, m("grip", (0.36, 0.22, 0.12), 0.8), 10))
+    return o
+
+
+def supernova_jar():
+    """A jam jar with a whole exploding star swirling inside, lid pointing at
+    the ice."""
+    o = []
+    b = body()
+    glass = m("jar_glass", (0.78, 0.86, 0.95), 0.05)
+    lid = m("jar_lid", (0.75, 0.75, 0.8), 0.3, 0.9)
+    pink = m("nova_pink", (1.0, 0.45, 0.85), 0.3, 0.0, (1.0, 0.35, 0.8))
+    cyan = m("nova_cyan", (0.45, 0.95, 1.0), 0.3, 0.0, (0.35, 0.9, 1.0))
+    star = m("nova_star", (1.0, 1.0, 0.9), 0.3, 0.0, (1.0, 1.0, 0.8))
+    # The glass is crystal clear, so only its base, shoulder and a few glints show.
+    o.append(along_z([(0.045, 0.0), (0.064, 0.0), (0.066, 0.02), (0.05, 0.021)], 0.12, glass, 22, smooth=False))
+    o.append(along_z([(0.066, 0.0), (0.066, 0.012), (0.06, 0.03), (0.052, 0.04), (0.05, 0.04), (0.058, 0.03), (0.062, 0.012),
+                      (0.062, 0.0)], -0.04, glass, 22, smooth=False))
+    for k in range(3):
+        a = 0.6 + k * 0.35
+        o.append(box((math.cos(a) * 0.066, math.sin(a) * 0.066, 0.04), (0.004, 0.012, 0.14 - k * 0.03), m("jar_glint", WHITE, 0.1),
+                     rot_z(a), 0.0))
+    o.append(along_z([(0.054, 0.0), (0.054, 0.035), (0.03, 0.036), (0.03, 0.03)], -0.075, lid, 22, smooth=False))   # a lid with a hole
+    for k in range(5):   # lid ridges
+        o.append(along_z([(0.0565, 0.0), (0.0565, 0.004), (0.054, 0.004)], -0.072 + k * 0.006, lid, 22, smooth=False))
+    # Inside: a glowing core (the tool's colour), swirls and stars.
+    o.append(sphere((0, 0, 0.02), (0.035, 0.035, 0.035), b, 14, 8))
+    o.append(sphere((0, 0, 0.02), (0.02, 0.02, 0.02), star, 10, 6))
+    sw = torus((0, 0, 0), 0.05, 0.008, pink, 20, 5)
+    transform(sw, rot_x(1.2), (0, 0, 0.02))
+    o.append(sw)
+    sw2 = torus((0, 0, 0), 0.04, 0.006, cyan, 20, 5)
+    transform(sw2, rot_z(0.9) @ rot_x(0.4), (0, 0, 0.02))
+    o.append(sw2)
+    import random as _r
+    rng = _r.Random(9)
+    for k in range(14):
+        a, r = rng.uniform(0, math.tau), rng.uniform(0.02, 0.06)
+        o.append(sphere((math.cos(a) * r, math.sin(a) * r, rng.uniform(-0.04, 0.1)), (0.005, 0.005, 0.005), star, 4, 3))
+    # A label and a strap you hold it by.
+    lab = cyl((0, 0, 0.07), (0, 0, 0.11), 0.067, 0.067, m("jar_label", (0.97, 0.93, 0.8), 0.8), 22)
+    deform(lab, lambda p: Vector((p.x, p.y, p.z)) if p.y < 0.0 else Vector((p.x, -abs(p.y) * 0.1 - 0.06, p.z)))
+    o.append(lab)
+    o.append(box((0, -0.11, 0.06), (0.03, 0.08, 0.04), m("grip", (0.36, 0.22, 0.12), 0.8), rot_x(0.2), 0.01))
+    return o
+
+
 def main():
     reset()
     objs = []
-    for i, fn in enumerate([hair_dryer, heat_lamp, blowtorch, flamethrower, lava_hose, mirror_remote]):
+    for i, fn in enumerate([hair_dryer, heat_lamp, blowtorch, flamethrower, lava_hose, mirror_remote,
+                            dragon_puppet, lightning_rod, meteor_remote, pocket_sun, supernova_jar]):
         objs.append(join(fn(), "Tool%d" % i))
     export("tools", objs)
 

@@ -1,7 +1,8 @@
 class_name Levels
 extends RefCounted
 ## Level descriptions: the shape of each glacier and what's frozen inside it.
-## There's one valley for now. A new level is a new dictionary like VALLEY.
+## A map is a dictionary like VALLEY or HARBOR.
+## Balance.map says which one is being played.
 ##
 ## A level has one or more glaciers, melted in order: when one is gone, the
 ## next one opens up (the valley's village glacier, then the frozen lake).
@@ -120,18 +121,198 @@ const VALLEY := {
 }
 
 
+# Frozen Harbor: a different place altogether. No valley: a strip of shore
+# under steep arctic mountains, with the open sea in front of it. You come out
+# of the boathouse on the quay looking west along the waterfront. A lobe of
+# ice has come down a gully and buried the fishing cabins in the cove ahead;
+# to your left the whole bay is frozen out to the breakwater, with the fleet
+# stuck in it, and a pier leads out onto it once the cabins are free. There's
+# a lighthouse on the western head, and no trees and no river anywhere.
+# (The shore's shape is Coast, the town and the pier are HarborTown.)
+const HARBOR := {
+	"name": "Frozen Harbor",
+	"seed": 20261202,
+	"town": "harbor",
+	"spawn": Vector3(4.5, 0.0, 12.5),
+	"spawn_yaw": 1.36,              # looking west along the quay: sea on the left, cliffs on the right
+	# Kevin has an island of his own out in the bay (top of his crater, and what he looks at).
+	"volcano": Vector3(52.0, 13.0, 42.0),
+	"volcano_faces": Vector3(-12.0, 0.0, 60.0),
+	"glaciers": [
+		{
+			"name": "the harbour glacier",
+			"title": "Harbour glacier",
+			"kind": "blobs",            # rounded lobes of ice run together (IceField._blobs_height)
+			"field_min": Vector3(-52.5, 0.0, -42.0),
+			"field_max": Vector3(-9.0, 19.5, 18.0),
+			"res": 0.75,                # the harbour's tools are big: a coarser grid keeps phones quick
+			# Each lobe: middle x, z, radius across (x) and along (z), height (x "height").
+			# The big one and its two shoulders lie on the cabins; the last two are the
+			# icefall it came down, stepping up to the gully in the cliffs.
+			"blobs": [[-31.0, -1.0, 17.5, 18.5, 0.9], [-22.5, -4.0, 11.0, 15.0, 0.85], [-41.0, 2.0, 9.0, 11.0, 0.75],
+				[-36.0, -22.0, 11.0, 14.0, 1.0], [-39.0, -34.0, 8.5, 8.0, 1.12]],
+			"height": 13.0,
+			"edge": 0.45,
+			"wobble": 0.13,
+			"hills": 2.0,
+			"bumps": 1.0,
+			"layers": "harbor",
+			"layer_depth": 1.45,
+			"finds_box": [Vector2(-47.0, -38.0), Vector2(-14.0, 13.0)],
+			"crevasses": [
+				{"z": -27.0, "bow": 1.0, "depth": 2.8, "width": 0.5, "x0": -43.0, "x1": -31.0},
+				{"z": -13.5, "bow": 1.6, "depth": 3.4, "width": 0.6, "x0": -43.0, "x1": -22.0},
+				{"z": 1.5, "bow": -1.4, "depth": 3.0, "width": 0.55, "x0": -42.0, "x1": -25.0},
+			],
+			# A trawler hauled up the slipway for the winter went under with the
+			# cabins; the tip of her mast still shows.
+			"ships": [
+				{"name": "The Rusty Halibut", "mesh": "Trawler", "pos": Vector3(-21.3, 0.0, -3.0), "yaw": 0.0,
+					"bounty": 45000000.0, "ashore": true},
+			],
+		},
+		{
+			# The bay froze to the bottom: a slab of sea ice as tall as a house,
+			# out to the breakwater. The pier's gate stays shut until the cabins are free.
+			"name": "the frozen bay",
+			"title": "Frozen bay",
+			"kind": "blobs",
+			"field_min": Vector3(-76.0, 0.0, 24.0),
+			"field_max": Vector3(52.0, 23.0, 120.0),
+			"res": 1.0,
+			"blobs": [[-12.0, 72.0, 57.0, 36.0, 1.0]],
+			"height": 20.0,
+			"edge": 0.5,
+			"wobble": 0.08,
+			"hills": 3.0,
+			"bumps": 0.8,
+			"layers": "bay",
+			"layer_depth": 2.0,
+			"worth": 2.0,
+			"finds_box": [Vector2(-56.0, 38.0), Vector2(32.0, 106.0)],
+			"crevasses": [
+				{"z": 50.0, "bow": -2.5, "depth": 4.5, "width": 1.3, "x0": -40.0, "x1": -6.0},
+				{"z": 70.0, "bow": 3.0, "depth": 4.0, "width": 1.2, "x0": 0.0, "x1": 34.0},
+				{"z": 92.0, "bow": -2.0, "depth": 3.5, "width": 1.0, "x0": -38.0, "x1": 4.0},
+			],
+			# The fishing fleet, frozen mid-catch (PirateFleet.HULLS).
+			"ships": [
+				{"name": "The Salty Herring", "mesh": "Trawler", "pos": Vector3(-14.0, 0.0, 54.0), "yaw": 0.0,
+					"bounty": 3500000000.0},
+				{"name": "The Lucky Cod", "mesh": "Skiff", "pos": Vector3(-42.0, 0.0, 68.0), "yaw": PI,
+					"bounty": 900000000.0},
+				{"name": "The Wobbly Whelk", "mesh": "Skiff", "pos": Vector3(20.0, 0.0, 64.0), "yaw": 0.0,
+					"bounty": 1800000000.0},
+				{"name": "The Big Kipper", "mesh": "Trawler", "pos": Vector3(2.0, 0.0, 92.0), "yaw": PI,
+					"bounty": 6600000000.0},
+			],
+		},
+	],
+	# The shore (see Coast). "valley" is what every map calls its ground.
+	"valley": {
+		"coast": true,
+		"center": Vector2(-14.0, 22.0),   # the mountains' grid is finest round here
+		"shore_z": 21.0,                  # the quay's edge: land to the north, sea to the south
+		# Flat ground you can walk on, north of the shore: middle x, z, half-size x, z, and
+		# whether it's an oval (1) or a box (0). The quay, and the cove the cabins stand in.
+		"land": [[-13.0, 8.5, 35.0, 12.5, 0], [-31.0, -8.0, 25.0, 33.0, 1]],
+		# Rock standing in the sea (ovals): the western head with the lighthouse
+		# on it, the eastern cape, and a few skerries.
+		"rocks": [[-78.0, 28.0, 21.0, 22.0], [46.0, 13.0, 21.0, 13.0], [-96.0, 96.0, 9.0, 6.0],
+			[84.0, 104.0, 7.0, 10.0], [-40.0, 150.0, 8.0, 5.0], [118.0, 64.0, 10.0, 7.0]],
+		# The breakwater: a band of rubble along part of an oval round the bay
+		# (middle x, z, radius x, z, half-width, from and to angle: 0 = east, a quarter turn = south).
+		"mole": [-12.0, 72.0, 69.0, 53.0, 5.0, -0.22, 2.55],
+		"bay": [-12.0, 72.0, 63.5, 47.5],   # the sea you can walk on once the gate is open
+		"gate": Vector2(-3.0, 21.0),      # where the pier leaves the quay
+		"pier": 6.5,                      # how far it goes out
+		"lighthouse": Vector2(-64.0, 31.0),
+		"peaks": 1.3,                     # steeper than the valley's
+		"snow_line": 8.0,
+		"tree_line": 0.0,                 # nothing grows up there
+		"glacier_source": Vector3(-39.0, 0.0, -50.0),
+		"paths": [
+			[Vector2(8.7, 11.5), Vector2(4.0, 13.5), Vector2(-3.0, 17.2), Vector2(-14.0, 18.2), Vector2(-30.0, 18.0),
+				Vector2(-45.0, 15.5)],
+			[Vector2(-3.0, 17.2), Vector2(-3.0, 21.0)],
+			[Vector2(-31.0, 18.0), Vector2(-31.5, 6.0), Vector2(-32.5, -2.0)],
+		],
+		"boulders": [Vector3(-9.0, 0, 1.5), Vector3(3.0, 0, -1.5), Vector3(19.5, 0, 2.0), Vector3(-52.0, 0, 6.0),
+			Vector3(-9.5, 0, -14.0), Vector3(18.0, 0, 18.5), Vector3(-48.0, 0, 18.0), Vector3(-53.0, 0, -22.0)],
+	},
+	# How it looks: an arctic evening with the northern lights out, the low
+	# sun over the sea, snow on the ground that thaws to tundra.
+	"look": {
+		"sky_top": Color(0.13, 0.2, 0.42), "sky_horizon": Color(0.98, 0.74, 0.6), "sky_ground": Color(0.3, 0.32, 0.42),
+		"cloud_light": Color(1.0, 0.86, 0.8), "cloud_shade": Color(0.58, 0.55, 0.72), "cover": 0.3, "aurora": 1.0,
+		"sun_color": Color(1.0, 0.84, 0.7), "sun_energy": 0.8, "sun_dir": Vector3(-0.72, -0.58, 0.16),
+		"fog": Color(0.8, 0.76, 0.86), "ambient": Color(0.6, 0.6, 0.7),
+		"water_shallow": Color(0.2, 0.55, 0.62), "water_deep": Color(0.04, 0.22, 0.4),
+		"shed_paint": Color(0.86, 0.62, 0.2), "shed_roof": Color(0.2, 0.26, 0.32),
+		# The ground (valley_floor.gdshaderinc): snow, shingle, and the tundra that comes up as it thaws.
+		"ground": {
+			"earth_a": Color(0.86, 0.9, 0.96), "earth_b": Color(0.76, 0.83, 0.93), "silt_color": Color(0.5, 0.53, 0.58),
+			"sand_color": Color(0.46, 0.47, 0.5), "path_color": Color(0.6, 0.58, 0.56), "stone_color": Color(0.66, 0.68, 0.74),
+			"grass_a": Color(0.5, 0.49, 0.27), "grass_b": Color(0.53, 0.4, 0.27), "grass_dry": Color(0.6, 0.53, 0.42),
+		},
+		"green_max": 0.6,               # the snow never all goes: tundra, not meadow
+		"rock_a": Color(0.36, 0.38, 0.44), "rock_b": Color(0.27, 0.3, 0.37),   # dark slate cliffs
+		"boulder": Color(0.42, 0.44, 0.5), "boulder_b": Color(0.35, 0.38, 0.46),
+	},
+	# What the signs and pop-ups say.
+	"story": {
+		"gate_closed": "🔒 THE FROZEN BAY\nPier closed until the\nharbour is free",
+		"gate_open": "THE FROZEN BAY\nThe pier's open.\nGo melt it!",
+		"stage_title": "The harbour is free!",
+		"stage_body": "The fishermen are back on the quay, and your helpers are off for a well-earned fish supper.\n\nBut look out to sea. The whole bay froze solid, with the fleet still in it, and the gate on the pier is open now.\nHire a new crew at the boathouse and go melt %s!",
+		"stage_button": "To the bay!",
+		"ending": "The last of the sea ice drifted away and the boats can sail again.\nThe harbour is open!",
+		"walk": "Walk around the harbour",
+		"ship_freed": "⚓ %s is free! The crew pays you %s meltwater",
+		"done_label": "The harbour is open!",
+	},
+}
+
+# The valley's own words, for maps that don't change them.
+const VALLEY_STORY := {
+	"gate_closed": "🔒 THE FROZEN LAKE\nClosed until the\nvillage is free",
+	"gate_open": "THE FROZEN LAKE\nThe gate's open.\nGo melt it!",
+	"stage_title": "The village is free!",
+	"stage_body": "Everyone's home again, and your helpers have earned a holiday: they're partying in the village square.\n\nBut look past the fence. The whole lake froze solid, and the gate is open now.\nHire a new crew at the shed and go melt %s!",
+	"stage_button": "To the lake!",
+	"ending": "The last chunk dripped away and the lake is free.\nSummer is back!",
+	"walk": "Walk around the village",
+	"ship_freed": "☠️ %s is free! The goblins pay you %s meltwater",
+	"done_label": "Summer is back!",
+}
+
 static func current() -> Dictionary:
-	return VALLEY
+	return HARBOR if Balance.map == "harbor" else VALLEY
+
+
+static func story(key: String) -> String:
+	return str(current().get("story", VALLEY_STORY).get(key, VALLEY_STORY[key]))
+
+
+static func look(key: String, fallback):
+	return current().get("look", {}).get(key, fallback)
+
+
+static func map_index(key: String) -> int:
+	for i in MAPS.size():
+		if str(MAPS[i].get("key", "")) == key:
+			return i
+	return 0
 
 
 ## Every map, in the order they come out. Only the first is built so far; the
 ## rest are on the level menu after the ending, stamped COMING SOON, to show
 ## what's on the way (LevelMenu). "ready" maps can be played.
 const MAPS := [
-	{"name": "Alpine Valley", "icon": "🏔️", "ready": true,
+	{"name": "Alpine Valley", "key": "valley", "icon": "🏔️", "ready": true,
 		"blurb": "A mountain village under a glacier, and a whole frozen lake behind it."},
-	{"name": "Frozen Harbor", "icon": "⚓",
-		"blurb": "A fishing town and its whole fleet, frozen mid-catch."},
+	{"name": "Frozen Harbor", "key": "harbor", "icon": "⚓", "ready": true, "after": "valley",
+		"blurb": "A fishing town and its whole fleet, frozen mid-catch. Bring your Orbital Mirror."},
 	{"name": "Arctic Research Base", "icon": "📡",
 		"blurb": "The scientists froze along with their experiments. Careful what you thaw."},
 	{"name": "Ice Cave City", "icon": "💎",

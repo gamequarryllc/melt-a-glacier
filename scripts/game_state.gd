@@ -33,6 +33,8 @@ var player_yaw: float = 0.0
 var player_pitch: float = -0.15
 var glacier_saves: Array = []          # IceField.to_save_string() per glacier ("" = untouched)
 var tutorial_step: int = 0             # onboarding hints (World._update_coach)
+var map: String = "valley"             # which map (Balance.MAPS, Levels) is being played
+var maps_won: Array = []               # every map you've ever melted (kept when you start a new one)
 
 # --- Runtime only -------------------------------------------------------------------
 var grid: IceField                     # the glacier you're melting now (set by the world)
@@ -52,6 +54,7 @@ func _ready() -> void:
 
 
 func reset_state(keep_purchases: bool = false) -> void:
+	Balance.use_map(map)
 	var keep_ads := owns_remove_ads_2x
 	var keep_helpers := owns_helpers_2x
 	water = 0.0
@@ -79,7 +82,7 @@ func reset_state(keep_purchases: bool = false) -> void:
 	player_yaw = 0.0
 	player_pitch = -0.15
 	glacier_saves = []
-	tutorial_step = 0
+	tutorial_step = 0 if map == "valley" else 3   # you know how it works by the second map
 
 
 func now() -> float:
@@ -210,7 +213,7 @@ func income_per_minute() -> float:
 
 func double_water_amount() -> float:
 	## What "double your water" pays: your water again, capped at a few minutes of income.
-	return minf(water, maxf(Balance.DOUBLE_WATER_MIN * 3.0, income_per_minute() * Balance.DOUBLE_WATER_MINUTES))
+	return minf(water, maxf(Balance.DOUBLE_WATER_MIN * Balance.scale * 3.0, income_per_minute() * Balance.DOUBLE_WATER_MINUTES))
 
 
 # --- Earning ------------------------------------------------------------------------------
@@ -263,6 +266,8 @@ func check_win() -> void:
 		changed.emit()
 		return
 	has_won = true
+	if not maps_won.has(map):
+		maps_won.append(map)
 	save_game()
 	won.emit()
 	changed.emit()
@@ -408,6 +413,8 @@ func to_dict() -> Dictionary:
 		"player_pitch": player_pitch,
 		"glaciers": glacier_saves,
 		"tutorial_step": tutorial_step,
+		"map": map,
+		"maps_won": maps_won,
 	}
 
 
@@ -428,8 +435,17 @@ func load_game() -> void:
 		return
 	owns_remove_ads_2x = bool(data.get("owns_remove_ads_2x", false))
 	owns_helpers_2x = bool(data.get("owns_helpers_2x", false))
+	maps_won = []
+	for k in data.get("maps_won", []):
+		maps_won.append(str(k))
+	if bool(data.get("has_won", false)) and not maps_won.has(str(data.get("map", "valley"))):
+		maps_won.append(str(data.get("map", "valley")))   # won before maps were kept track of
 	if int(data.get("version", 0)) < 4:
 		return   # an older, smaller valley: start the new one fresh, keep purchases
+	var m := str(data.get("map", "valley"))
+	if m != map and Balance.MAPS.has(m):
+		map = m
+		reset_state(true)   # the arrays below are sized for this map
 	water = float(data.get("water", 0.0))
 	lifetime_water = float(data.get("lifetime_water", 0.0))
 	tool_index = clampi(int(data.get("tool_index", 0)), 0, Balance.TOOLS.size() - 1)
@@ -456,8 +472,11 @@ func load_game() -> void:
 	tutorial_step = int(data.get("tutorial_step", 0))
 
 
-func wipe_save() -> void:
-	## Start a fresh glacier (keeps purchases). The world rebuilds itself.
+func wipe_save(new_map: String = "") -> void:
+	## Start a fresh glacier (keeps purchases), on `new_map` if given. The
+	## world rebuilds itself.
+	if new_map != "" and Balance.MAPS.has(new_map):
+		map = new_map
 	reset_state(true)
 	grid = null
 	grids = []

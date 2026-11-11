@@ -40,7 +40,7 @@ func _place(player, at: Vector3, look: Vector3) -> void:
 
 func _run() -> void:
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	var player = world.player
@@ -113,5 +113,5 @@ func _run() -> void:
 	_place(player, Vector3(13.0, 0.0, 13.8), Vector3(13.2, 1.6, 8.0))
 	await _frames(6)
 	await _shot("shed_tools")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	quit(0)

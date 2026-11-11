@@ -27,7 +27,7 @@ func _frames(n: int) -> void:
 
 func _run() -> void:
 	var gs = root.get_node("GameState")
-	gs.wipe_save()
+	gs.wipe_save("valley")
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	var hud = world.hud

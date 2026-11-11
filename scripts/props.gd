@@ -22,8 +22,9 @@ static func tool_mesh(i: int) -> ArrayMesh:
 	## Made in Blender (art/blender/build_tools.py). The parts in the "body"
 	## material take the tool's colour.
 	var t := clampi(i, 0, Balance.TOOLS.size() - 1)
+	var model := str(Balance.TOOLS[t].get("model", "Tool%d" % t))
 	var col: Color = Balance.TOOLS[t].color
-	return Models.baked("tools", "Tool%d" % t, {"body": col})
+	return Models.baked("tools", model, {"body": col})
 
 
 static func upgrade_mesh(key: String) -> ArrayMesh:
