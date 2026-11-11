@@ -153,7 +153,9 @@ godot --headless --fixed-fps 20 -s res://tests/pacing.gd -- casual   # a slower 
 ```
 
 Add `map=harbor` for Frozen Harbor (aim for about 20 to 23 minutes for its
-glacier and about 30 for the bay, keen). Ice is worth what it costs to melt and
+glacier and under 30 for the bay, keen). One run isn't enough to go on: the
+same numbers gave 50 to 59 minutes over four runs, so try `seed=1`, `seed=2`
+and `seed=3` and look at the average. Ice is worth what it costs to melt and
 a strong tool wastes its heat on soft ice, so a thin, flat glacier pays out
 slowly: keep the bay thick (20 m, 2 m layers) rather than wide.
 

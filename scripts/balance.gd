@@ -44,9 +44,9 @@ const LAYER_SETS = {
 		{"name": "Kelp Ice", "hp": 246400.0, "color": Color(0.36, 0.7, 0.6)},
 		{"name": "Deep Harbour Ice", "hp": 616000.0, "color": Color(0.24, 0.55, 0.66)},
 		{"name": "Whale-Song Ice", "hp": 1540000.0, "color": Color(0.2, 0.42, 0.7)},
-		{"name": "Kraken Ice", "hp": 3080000.0, "color": Color(0.22, 0.3, 0.62)},
-		{"name": "Shipwreck Ice", "hp": 6776000.0, "color": Color(0.18, 0.22, 0.48)},
-		{"name": "The Old Anchor", "hp": 15400000.0, "color": Color(0.14, 0.16, 0.36)},
+		{"name": "Kraken Ice", "hp": 2464000.0, "color": Color(0.22, 0.3, 0.62)},
+		{"name": "Shipwreck Ice", "hp": 5420800.0, "color": Color(0.18, 0.22, 0.48)},
+		{"name": "The Old Anchor", "hp": 12320000.0, "color": Color(0.14, 0.16, 0.36)},
 	],
 	# ...and the bay, frozen under the northern lights: the deeper you go the
 	# stranger the colours get.
@@ -113,9 +113,9 @@ const HARBOR_TOOLS = [
 	{"name": "Meteor Remote", "fx": "meteor_remote", "model": "Tool8", "icon": "☄️", "power": 33000.0, "radius": 3.9, "range": 60.0,
 		"cost": 616000000.0, "color": Color(0.95, 0.45, 0.15), "desc": "One button. Many meteors. No refunds."},
 	{"name": "Pocket Sun", "fx": "pocket_sun", "model": "Tool9", "icon": "☀️", "power": 135000.0, "radius": 4.2, "range": 55.0,
-		"cost": 18480000000.0, "color": Color(1.0, 0.75, 0.15), "desc": "A whole star in a lantern. Mind your eyebrows."},
+		"cost": 12320000000.0, "color": Color(1.0, 0.75, 0.15), "desc": "A whole star in a lantern. Mind your eyebrows."},
 	{"name": "Supernova in a Jar", "fx": "supernova_jar", "model": "Tool10", "icon": "🌌", "power": 600000.0, "radius": 4.6, "range": 70.0,
-		"cost": 184800000000.0, "color": Color(0.7, 0.35, 0.95), "desc": "Shake well. Point away from face."},
+		"cost": 135520000000.0, "color": Color(0.7, 0.35, 0.95), "desc": "Shake well. Point away from face."},
 ]
 
 # Shed upgrades. Effect = 1 + per_level * level. Cost = base * growth^level.
