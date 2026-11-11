@@ -1094,6 +1094,7 @@ func open_catalogue() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(scroll)
+	DragScroll.attach(scroll)   # drag the list with a finger; a fat scrollbar
 	_list_box = VBoxContainer.new()
 	_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list_box.add_theme_constant_override("separation", 2)
