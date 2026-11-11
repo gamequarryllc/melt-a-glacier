@@ -7,7 +7,7 @@ name: Mobile builds
 # "release" ticked. The release check must pass (every store id filled in),
 # the bundle is signed with your upload key, and if the Play service account
 # secret is set it goes straight to the Play Console "internal testing" track.
-# The iPhone build itself runs on Codemagic (codemagic.yaml): it needs a Mac.
+# The iPhone build itself runs on a GitHub Mac (ios.yml).
 #
 # Secrets (repo Settings > Secrets and variables > Actions), all optional for PRs:
 #   ANDROID_KEYSTORE_BASE64   base64 of your upload keystore (.jks)
@@ -162,7 +162,7 @@ jobs:
       - name: Export iOS Xcode project (checks the iOS plugins and settings)
         run: |
           mkdir -p build/ios
-          # Godot insists on a team id; the real one is set on Codemagic.
+          # Godot insists on a team id; the real one is set by ios.yml.
           sed -i 's/^application\/app_store_team_id=""/application\/app_store_team_id="ABCDE12345"/' export_presets.cfg
           timeout 900 ~/godot/godot --headless --export-release "iOS" build/ios/MeltAGlacier.ipa || true
           test -d build/ios/MeltAGlacier.xcodeproj

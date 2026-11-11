@@ -8,7 +8,7 @@ value goes once you have it.
 **Rule for secrets:** ids that ship inside the app (AdMob ids, RevenueCat
 *public* keys) go in the repo. Passwords, keystores, the App Store Connect API
 key, the Play service account and RevenueCat *secret* keys never do: they go in
-Codemagic or GitHub Actions secrets only. The repo is public; that is fine for
+GitHub Actions secrets only. The repo is public; that is fine for
 the first kind and the reason for the second rule. Make it private before
 launch if you prefer (note: GitHub Pages, which hosts the web playtest and the
 privacy policy, needs a paid GitHub plan for private repos).
@@ -18,14 +18,14 @@ privacy policy, needs a paid GitHub plan for private repos).
 You don't need AdMob or RevenueCat for this. A preview build shows Google's test ads, and purchases say the store isn't available yet.
 
 1. Apple: register the bundle id and create the app record (section 1, steps 1 and 4 only).
-2. Codemagic: section 4.
-3. Start a build with the workflow *iPhone to TestFlight* (the preview). Then install TestFlight on the iPhone and accept the invite.
+2. iPhone builds: section 4.
+3. Actions > *iOS build* > Run workflow with mode `testflight` and flavor `preview`. Then install TestFlight on the iPhone and accept the invite.
 
 ## 0. Decide two permanent things
 
 | What | Proposed | Where it's used |
 |---|---|---|
-| Bundle id / package name | `com.gamequarry.meltaglacier` | `export_presets.cfg` (Android + iOS), `codemagic.yaml`, `.github/workflows/mobile.yml` |
+| Bundle id / package name | `com.gamequarry.meltaglacier` | `export_presets.cfg` (Android + iOS), `.github/workflows/mobile.yml` |
 | Contact email for players | (yours) | replace `CONTACT_EMAIL` in `docs/privacy.html` |
 
 The bundle id can never change once the app is in either store.
@@ -43,8 +43,8 @@ The bundle id can never change once the app is in either store.
    Each needs a display name, description and a review screenshot (any in-game
    screenshot of the catalogue works).
 4. **App Store Connect API key** (Users and Access > Integrations > App Store
-   Connect API > Team keys > +, role *App Manager*). Download the `.p8` once;
-   note the Issuer ID and Key ID. This is for Codemagic.
+   Connect API > Team keys > +, role *Admin*, which Xcode's cloud signing needs). Download the
+   `.p8` once; note the Issuer ID and Key ID. They go in the GitHub organization secrets (section 4).
 5. **App Privacy** questionnaire (App Store Connect > App Privacy). Answer:
    - Data used to track you: Device ID (advertising), *only via AdMob*.
    - Data linked to you: none. Data not linked to you: Purchase History (RevenueCat),
@@ -81,26 +81,21 @@ They go in `project.godot` (`[admob]` section) and `scripts/monetization/store_c
 **Send me**: the **public SDK keys** (Project settings > API keys): `appl_...` and
 later `goog_...`. They go in `store_config.gd`.
 
-## 4. iPhone: Codemagic
+## 4. iPhone: GitHub Actions
 
-1. codemagic.io > sign in with GitHub > add the `melt-a-glacier` repo
-   (it finds `codemagic.yaml` by itself).
-2. Team settings > Integrations > **Developer Portal** > connect the App Store
-   Connect API key from step 1.4. Name it exactly `Melt a Glacier ASC key`.
-3. Team settings > **Code signing identities**: let Codemagic generate an *Apple
-   Distribution* certificate and fetch an *App Store* profile for the bundle id.
-4. App settings > Environment variables, group **apple**:
-   - `APPLE_TEAM_ID`: your 10-character Team ID (developer.apple.com > Membership).
-   - `APP_STORE_APPLE_ID`: the app's numeric Apple ID (App Store Connect > App Information).
-5. **Start new build** (workflow *iPhone to TestFlight*). In about 20-30 minutes the
-   build appears in TestFlight. Install the TestFlight app on your iPhone to play it.
+iPhone builds run on GitHub's Mac runners (`.github/workflows/ios.yml`, `tools/ios_build.sh`):
+Godot exports the Xcode project, Xcode builds it, and a TestFlight run signs it with the
+App Store Connect API key and uploads it. The next build number comes from App Store Connect.
 
-For the build you submit to the App Store, pick the workflow *iPhone store build*
-instead: live ads and real purchases. It stops early with a clear list if any store
-id is still a placeholder (`tests/release_check.gd`), so a half-wired build never
-reaches the store.
+1. Organization secrets (GitHub > gamequarryllc > Settings > Secrets and variables > Actions):
+   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (the whole `.p8` file) and `APPLE_TEAM_ID`.
+2. Actions > **iOS build** > Run workflow, mode `testflight`:
+   - flavor **store**: live ads and real purchases, the build you submit. It stops early
+     with a clear list if any store id is still a placeholder (`tests/release_check.gd`).
+   - flavor **preview**: Google's test ads, for trying the game.
+3. In a few minutes the build appears in TestFlight. Install the TestFlight app on your iPhone to play it.
 
-Free Codemagic accounts get 500 Mac minutes a month: about 15-20 builds.
+Pull requests that change the build setup get an unsigned check build automatically.
 
 ## 5. Android: Google Play
 
@@ -148,5 +143,5 @@ Free Codemagic accounts get 500 Mac minutes a month: about 15-20 builds.
   signing from secrets, iOS export with icons, launch screen, ATT text and the
   encryption-exemption flag.
 - CI: every pull request builds the Android bundle and the iOS Xcode project and
-  runs the smoke and ads/purchases tests. `codemagic.yaml` builds and uploads to TestFlight.
+  runs the smoke and ads/purchases tests. `.github/workflows/ios.yml` builds and uploads to TestFlight.
 - Privacy policy page (`docs/privacy.html`, published with the web build).

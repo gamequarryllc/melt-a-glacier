@@ -61,7 +61,7 @@ Fastest path, no APK needed:
 4. In Godot, run **Project > Install Android Build Template** once (the ads and store plugins need the Gradle build).
 5. Plug the phone in. An Android icon appears at the top right of Godot. Click it to install and run the game on the phone.
 
-Store builds (Android App Bundle, and the iPhone build on Codemagic) are made by CI: see [docs/LAUNCH.md](docs/LAUNCH.md).
+Store builds (Android App Bundle and the iPhone build) are made by GitHub Actions: see [docs/LAUNCH.md](docs/LAUNCH.md).
 
 ## What's in the prototype
 
