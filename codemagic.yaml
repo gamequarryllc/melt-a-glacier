@@ -2,11 +2,16 @@
 # project, Xcode builds and signs it, and the result goes to TestFlight.
 # Setup steps (once): docs/LAUNCH.md, section "iPhone: Codemagic".
 #
-# Start a build: Codemagic > melt-a-glacier > "Start new build", or push a tag
-# like v1.0.3 (after turning on the tag trigger in Codemagic's webhook settings).
+# Start a build: Codemagic > melt-a-glacier > "Start new build", then pick the
+# workflow:
+#   "iPhone to TestFlight"  a preview: Google's test ads, for trying the game.
+#   "iPhone store build"    the real thing: live ads and purchases. This is the
+#                           build to pick on the App Store page and submit.
+# Pushing a tag like v1.0.3 also makes a store build (after turning on the tag
+# trigger in Codemagic's webhook settings).
 
 workflows:
-  ios-testflight:
+  ios-testflight: &ios
     name: iPhone to TestFlight
     instance_type: mac_mini_m2
     max_build_duration: 90
@@ -14,7 +19,7 @@ workflows:
       # The name you gave the App Store Connect API key in Codemagic
       # (Team settings > Integrations > Developer Portal).
       app_store_connect: Melt a Glacier ASC key
-    environment:
+    environment: &ios_environment
       groups:
         - apple   # APPLE_TEAM_ID (10 characters), APP_STORE_APPLE_ID (the app's numeric Apple ID)
       ios_signing:
@@ -24,14 +29,10 @@ workflows:
       vars:
         PROJECT: build/ios/MeltAGlacier.xcodeproj
         # "false" = a TestFlight preview: Google's test ads, store ids may still
-        # be empty. Tags (v1.0.3) and STORE_RELEASE=true make a real store build,
-        # which refuses to build until every id in store_config.gd is filled in.
+        # be empty. "true" (the store workflow below) and tags (v1.0.3) make a
+        # real store build, which refuses to build until every id in
+        # store_config.gd is filled in.
         STORE_RELEASE: "false"
-    triggering:
-      events:
-        - tag
-      tag_patterns:
-        - pattern: "v*"
     cache:
       cache_paths:
         - $HOME/godot-cache
@@ -119,3 +120,19 @@ workflows:
         # this on sends each build to Apple's beta review for outside testers,
         # which needs the Test Information page filled in first.
         submit_to_testflight: false
+
+  # The same build with live ads and purchases. Everything is shared with the
+  # preview workflow above except STORE_RELEASE and the tag trigger.
+  ios-store:
+    <<: *ios
+    name: iPhone store build
+    environment:
+      <<: *ios_environment
+      vars:
+        PROJECT: build/ios/MeltAGlacier.xcodeproj
+        STORE_RELEASE: "true"
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "v*"

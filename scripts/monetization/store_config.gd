@@ -16,7 +16,7 @@ class_name StoreConfig
 # --- RevenueCat (in-app purchases) ---------------------------------------------------
 # RevenueCat dashboard > Project > API keys > the public app-specific keys.
 const REVENUECAT_KEY_ANDROID := ""   # starts with "goog_"
-const REVENUECAT_KEY_IOS := ""       # starts with "appl_"
+const REVENUECAT_KEY_IOS := "appl_vmapbhzARbgVnTaGbsWJKVUBQqA"   # starts with "appl_"
 
 # RevenueCat entitlement identifier -> the game's product id (monetization.gd).
 # In RevenueCat, attach the store product of the same name to each entitlement.
@@ -29,8 +29,8 @@ const ENTITLEMENT_TO_PRODUCT := {
 # AdMob > Apps > (the app) > Ad units. Release builds use these. Debug builds,
 # the editor and anything with an empty id use Google's test units, so you can
 # never accidentally click your own live ads (that gets AdMob accounts banned).
-const ADMOB_REWARDED := {"Android": "", "iOS": ""}
-const ADMOB_INTERSTITIAL := {"Android": "", "iOS": ""}
+const ADMOB_REWARDED := {"Android": "", "iOS": "ca-app-pub-1111885470613027/8498376389"}
+const ADMOB_INTERSTITIAL := {"Android": "", "iOS": "ca-app-pub-1111885470613027/7185294714"}
 
 # Optional: a separate rewarded unit per placement, only for nicer AdMob reports.
 # Placements not listed here use ADMOB_REWARDED.

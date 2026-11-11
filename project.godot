@@ -3,9 +3,13 @@
 
 config_version=5
 
+[admob]
+
+general/ios/app_id="ca-app-pub-1111885470613027~6567181765"
+
 [application]
 
-config/name="A Game About Melting A Glacier"
+config/name="Melt a Glacier"
 config/description="Walk a glacier in first person and melt it, one hair dryer at a time."
 run/main_scene="res://scenes/world.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")

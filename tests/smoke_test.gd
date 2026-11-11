@@ -321,6 +321,22 @@ func _run() -> void:
 	root.push_input(key)
 	await _frames(1)
 	check(int(gs.upgrade_levels["heat"]) == 1, "bought Heat Output at the bench (%s)" % hud._card_title.text)
+	# Past level 25 Heat Output goes into overdrive: each level multiplies, and
+	# the bench says so. (Then back to level 1 for the rest of the test.)
+	var water_was: float = gs.water
+	gs.upgrade_levels["heat"] = 25
+	check(is_equal_approx(gs.upgrade_mult("heat"), 7.25) and not gs.upgrade_maxed("heat"),
+		"Heat Output isn't maxed at level 25 (x%.2f)" % gs.upgrade_mult("heat"))
+	var over_cost: float = gs.upgrade_cost("heat")
+	gs.water = over_cost
+	check(shed.describe(thermo).body.contains("Overdrive") and gs.buy_upgrade("heat")
+		and is_equal_approx(gs.upgrade_mult("heat"), 7.25 * 1.3) and is_equal_approx(gs.upgrade_cost("heat"), over_cost * 1.5),
+		"overdrive: level 26 costs %s and gives x%.2f" % [Fmt.num(over_cost), gs.upgrade_mult("heat")])
+	gs.upgrade_levels["heat"] = int(gs.upgrade_def("heat").max)
+	check(gs.upgrade_maxed("heat") and not gs.buy_upgrade("heat"), "Heat Output tops out at level %d (x%.0f)" % [int(gs.upgrade_levels["heat"]), gs.upgrade_mult("heat")])
+	gs.upgrade_levels["heat"] = 1
+	gs.water = water_was
+	gs.changed.emit()
 	# Hire a penguin in the corner.
 	var peng = shed.item("helper", 0)
 	player.position = Vector3(14.8, 0.0, 9.6)
