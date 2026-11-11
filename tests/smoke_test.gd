@@ -666,7 +666,8 @@ func _run() -> void:
 	check(gs.grid.remaining == gs.grid.total and not gs.has_won, "start over gives a full glacier")
 	await _frames(20)
 
-	# --- Frozen Harbor: the second map.
+	# --- Frozen Harbor: the second map. What you've bought comes with you.
+	gs.owns_remove_ads_2x = true
 	gs.wipe_save("harbor")
 	world2.queue_free()
 	await _frames(2)
@@ -674,6 +675,12 @@ func _run() -> void:
 	root.add_child(world3)
 	await _frames(3)
 	check(gs.map == "harbor" and gs.maps_won.has("valley"), "Frozen Harbor starts, and the valley stays won")
+	var paid3: float = gs.tool_power()
+	gs.owns_remove_ads_2x = false
+	var plain3: float = gs.tool_power()
+	gs.owns_remove_ads_2x = true
+	check(is_equal_approx(paid3, plain3 * Balance.PERMANENT_MULT),
+		"a purchase made in the valley still counts in the harbour (x%.0f heat)" % (paid3 / plain3))
 	check(Balance.TOOLS[0].name == "Orbital Mirror" and gs.tool_index == 0 and Balance.TOOLS.size() == 6,
 		"the harbour starts with the Orbital Mirror, and 5 new tools to buy")
 	check(world3._find_markers.size() == Balance.DISCOVERIES.size() and Balance.DISCOVERIES.size() == 14,
@@ -715,6 +722,9 @@ func _run() -> void:
 		await _frames(25)
 	world3.force_melt = false
 	check(gs.grid.volume_left() < before3, "every harbour tool melts (%.0f m3 gone)" % (before3 - gs.grid.volume_left()))
+	gs.wipe_save("valley")
+	check(gs.map == "valley" and gs.owns_remove_ads_2x, "and it's still yours back in the valley")
+	gs.owns_remove_ads_2x = false
 	gs.wipe_save("valley")
 	print("SMOKE TEST ", "PASSED" if ok else "FAILED")
 	quit(0 if ok else 1)
