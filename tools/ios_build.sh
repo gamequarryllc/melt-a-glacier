@@ -207,6 +207,17 @@ archive="$WORK/$name.xcarchive"
 say "Archive (unsigned)"
 xcb "$logs/archive.log" "${common[@]}" -archivePath "$archive" archive "${unsigned[@]}"
 check_app "$archive/Products/Applications/$name.app"
+# An unsigned archive leaves the embedded SDK frameworks (Google Mobile Ads, User
+# Messaging Platform) without a signature the export will replace, and Apple then
+# rejects them. Giving each one an ad hoc signature first lets the export re-sign
+# them with the distribution certificate along with the app.
+say "Prepare the embedded frameworks for signing"
+for fw in "$archive/Products/Applications/$name.app/Frameworks/"*.framework; do
+  [ -d "$fw" ] || continue
+  before="$(codesign -dv "$fw" 2>&1 | grep -E '^(Authority|Signature)=' | head -1 || true)"
+  codesign --force --sign - --timestamp=none "$fw"
+  echo "$(basename "$fw"): was ${before:-unsigned}, now ad hoc signed"
+done
 say "Sign and upload to TestFlight"
 # Xcode signs for the App Store with a cloud-managed certificate while it uploads
 # (needs an Admin-role API key; no certificate or device on the build machine).
