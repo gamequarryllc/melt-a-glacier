@@ -1,0 +1,153 @@
+name: iOS build
+
+# Melt a Glacier's one pipeline for iPhone builds, on GitHub's Mac runners
+# (free for a public repo). Replaces Codemagic.
+#
+#   check       Unsigned build. Exports from Godot, runs the tests, and proves the
+#               game compiles and packages for iPhone. Runs on pull requests and
+#               pushes to main that change the build setup, and on request.
+#   testflight  Signs with the App Store Connect API key and uploads to TestFlight.
+#               Only ever started by hand (Actions > iOS build > Run workflow).
+#               flavor store = live ads and real purchases, the build you publish;
+#               preview = Google's test ads.
+#
+# Nothing here submits the game for review; that stays a manual step in App Store Connect.
+# Organization secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = unsigned test build; testflight = sign and upload"
+        required: true
+        type: choice
+        options: [check, testflight]
+        default: check
+      flavor:
+        description: "store = live ads and purchases (the build you publish); preview = test ads"
+        required: true
+        type: choice
+        options: [store, preview]
+        default: store
+      version:
+        description: "Version shown in TestFlight and on the App Store (blank = export_presets.cfg's)"
+        required: false
+        type: string
+        default: ""
+  pull_request:
+    paths:
+      - ".github/workflows/ios.yml"
+      - "tools/ios_build.sh"
+      - "tools/next_build_number.mjs"
+      - "tools/fetch_plugins.sh"
+      - "tools/plugin_versions.env"
+      - "export_presets.cfg"
+      - "project.godot"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios.yml"
+      - "tools/ios_build.sh"
+      - "tools/next_build_number.mjs"
+      - "tools/fetch_plugins.sh"
+      - "tools/plugin_versions.env"
+      - "export_presets.cfg"
+      - "project.godot"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ASC_APP_ID: "6829990975"
+
+jobs:
+  privacy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Privacy check (no personal information in a public repo)
+        run: python3 tools/privacy_check.py
+
+  build:
+    needs: privacy
+    # To build on your own Mac later, change this line to: runs-on: [self-hosted, macOS]
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore Godot and the plugins from cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-cache
+            ~/.cache/melt-a-glacier-plugins
+          key: ios-${{ hashFiles('tools/plugin_versions.env') }}-v1
+
+      - name: Install Godot and the iOS export template
+        run: |
+          set -euo pipefail
+          source tools/plugin_versions.env
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          cache="$HOME/godot-cache/$GODOT_VERSION"
+          mkdir -p "$cache"
+          if [ ! -d "$cache/Godot.app" ]; then
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "$base/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+            unzip -q "$RUNNER_TEMP/godot.zip" -d "$cache"
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/templates.tpz" "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+            unzip -q -j "$RUNNER_TEMP/templates.tpz" 'templates/ios.zip' 'templates/version.txt' -d "$cache/templates"
+            rm -f "$RUNNER_TEMP/godot.zip" "$RUNNER_TEMP/templates.tpz"
+          fi
+          templates="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$templates"
+          cp "$cache/templates/"* "$templates/"
+          echo "GODOT=$cache/Godot.app/Contents/MacOS/Godot" >> "$GITHUB_ENV"
+
+      - name: Use the newest released Xcode on the runner
+        run: |
+          set -euo pipefail
+          newest="$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|candidate|_rc' | sort -V | tail -1)"
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest"; fi
+          xcodebuild -version
+
+      - name: Build (${{ inputs.mode || 'check' }}, ${{ inputs.flavor || 'store' }})
+        env:
+          MODE: ${{ inputs.mode || 'check' }}
+          FLAVOR: ${{ inputs.flavor || 'store' }}
+          VERSION: ${{ inputs.version }}
+          WORK: ${{ runner.temp }}/ios
+          ASC_KEY_ID: ${{ inputs.mode == 'testflight' && secrets.ASC_KEY_ID || '' }}
+          ASC_ISSUER_ID: ${{ inputs.mode == 'testflight' && secrets.ASC_ISSUER_ID || '' }}
+          ASC_KEY_P8: ${{ inputs.mode == 'testflight' && secrets.ASC_KEY_P8 || '' }}
+          APPLE_TEAM_ID: ${{ inputs.mode == 'testflight' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          [ -n "$VERSION" ] || unset VERSION
+          bash tools/ios_build.sh "$MODE" 2>&1 | tee "$RUNNER_TEMP/ios_build.txt"
+          {
+            echo "### Melt a Glacier ($MODE, $FLAVOR)"
+            echo '```'
+            grep -E '^(name on|bundle id|architectures|size|scheme|MeltAGlacier.xcodeproj|== OK)' "$RUNNER_TEMP/ios_build.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Check builds only: a signing log can carry account details, and this repo is public.
+      - name: Keep the build logs when a check build fails
+        if: failure() && (inputs.mode || 'check') == 'check'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: ${{ runner.temp }}/ios/logs
+          retention-days: 7
