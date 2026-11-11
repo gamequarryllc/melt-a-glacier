@@ -38,7 +38,7 @@ The bundle id can never change once the app is in either store.
 2. **Agreements, Tax and Banking**: accept the *Paid Apps* agreement and add bank
    and tax info. In-app purchases don't work, even in TestFlight, until this is active.
 3. **In-app purchases** (Monetization > In-App Purchases), both *Non-Consumable*:
-   - `remove_ads_2x`: "Remove Ads + 2x Melting", $2.99
+   - `remove_ads_2x`: "Remove Ads + 2x Heat", $2.99
    - `helpers_2x`: "2x Helpers", $1.99
    Each needs a display name, description and a review screenshot (any in-game
    screenshot of the catalogue works).
