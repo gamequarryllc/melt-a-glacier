@@ -133,6 +133,7 @@ tests/smoke_test.gd      headless test: godot --headless -s res://tests/smoke_te
 tests/scroll_test.gd     finger-drag scrolling of the menus (taps still press buttons)
 tests/screenshots.gd     renders screenshots of key moments (see the top of the file)
 tests/store_shots.gd     renders the App Store screenshots (iPhone 6.9") and the purchases' review screenshot
+                         (add `harbor` after the folder for Frozen Harbor's two)
 tests/field_bench.gd     timing benchmark for the ice (build, re-mesh, melt rate)
 tests/pacing.gd          a bot plays a whole run and prints how long each part took
 tools/subset_emoji.sh    rebuild the emoji font if you add new emoji

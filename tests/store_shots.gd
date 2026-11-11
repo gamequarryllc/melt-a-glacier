@@ -5,6 +5,7 @@ extends SceneTree
 ##     --resolution 2868x1320 --fixed-fps 30 -s res://tests/store_shots.gd -- /tmp/store
 ## Also saves the Catalogue screen, which is the review screenshot the two
 ## in-app purchases need.
+## Add "harbor" after the folder for Frozen Harbor's two shots (07, 08) instead.
 ## (Untyped on purpose; see smoke_test.gd.)
 
 var out_dir := "/tmp/store"
@@ -19,7 +20,10 @@ func _initialize() -> void:
 	if args.size() > 0:
 		out_dir = args[0]
 	DirAccess.make_dir_recursive_absolute(out_dir)
-	_run.call_deferred()
+	if args.has("harbor"):
+		_run_harbor.call_deferred()
+	else:
+		_run.call_deferred()
 
 
 func _shot(name: String) -> void:
@@ -226,6 +230,58 @@ func _run() -> void:
 	await _frames(2)
 	await _shot("iap_review_catalogue")
 	gs.wipe_save()
+	quit(0)
+
+
+func _run_harbor() -> void:
+	## Frozen Harbor, the second map: the buried cabins, then the fleet in the bay.
+	gs = root.get_node("GameState")
+	gs.maps_won = ["valley"]
+	gs.wipe_save("harbor")
+	gs.owns_remove_ads_2x = false
+	gs.owns_helpers_2x = false
+	world = load("res://scenes/world.tscn").instantiate()
+	root.add_child(world)
+	hud = world.hud
+	player = world.player
+	var grid = world.grid
+	hud.set_touch_mode(true)
+	hud.set_safe_inset(Rect2(96.5, 0.0, 96.5, 34.4))   # iPhone 16 Pro Max, landscape
+	gs.tutorial_step = 4
+	await _frames(10)
+	hud.set_coach("")
+
+	# --- The Dragon Puppet on the harbour glacier, two cabins half dug out ----------
+	for c in [Vector3(-20.5, 2.0, 9.5), Vector3(-24.5, 2.5, 8.0), Vector3(-28.5, 3.0, 7.0), Vector3(-33.0, 3.0, 6.5)]:
+		_carve(grid, c, 4.8)
+	grid.flush()
+	_tool(1, 8, 4, 4)
+	gs.water = 412.0e6
+	_stand(Vector3(-12.0, 0.0, 14.5), Vector3(-29.0, 8.0, 2.0))
+	await _frames(20)
+	_clear_cards()
+	world.force_melt = true
+	await _frames(30)
+	print("harbour hit: ", player.target.hit)
+	await _shot("07_harbor")
+	world.force_melt = false
+	await _frames(10)
+
+	# --- The fishing cabins, free -------------------------------------------------
+	grid.melt_everything()
+	await _frames(40)
+	_close_popups()
+	_clear_cards()
+	_tool(3, 12, 6, 6)
+	gs.water = 9.64e9
+	_stand(Vector3(-25.0, 0.0, 3.2), Vector3(-37.0, 3.0, -6.5))
+	await _frames(120)
+	_close_popups()
+	_clear_cards()
+	await _frames(4)
+	await _shot("08_cabins")
+	gs.maps_won = []
+	gs.wipe_save("valley")
 	quit(0)
 
 
