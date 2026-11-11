@@ -99,6 +99,9 @@ jobs:
       - name: Smoke test
         run: timeout 300 ~/godot/godot --headless -s res://tests/smoke_test.gd
 
+      - name: Menu scrolling test
+        run: timeout 120 ~/godot/godot --headless -s res://tests/scroll_test.gd
+
       - name: Ads and purchases test
         run: timeout 120 ~/godot/godot --headless -s res://tests/monetization_test.gd
 

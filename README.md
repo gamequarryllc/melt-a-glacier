@@ -130,6 +130,7 @@ scripts/monetization/    ad + IAP interface, stub provider, autoload facade
 shaders/                 ice, mountain rock and snow, the valley floor, grass, sky, lake and river water, shed wood, the tools' flames and sparks
 fonts/                   subset Noto Color Emoji (the placeholder art) + license
 tests/smoke_test.gd      headless test: godot --headless -s res://tests/smoke_test.gd
+tests/scroll_test.gd     finger-drag scrolling of the menus (taps still press buttons)
 tests/screenshots.gd     renders screenshots of key moments (see the top of the file)
 tests/store_shots.gd     renders the App Store screenshots (iPhone 6.9") and the purchases' review screenshot
 tests/field_bench.gd     timing benchmark for the ice (build, re-mesh, melt rate)

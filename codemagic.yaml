@@ -67,6 +67,7 @@ workflows:
           "$GODOT" --headless --import
           "$GODOT" --headless -s res://tests/smoke_test.gd
           "$GODOT" --headless -s res://tests/monetization_test.gd
+          "$GODOT" --headless -s res://tests/scroll_test.gd
           if [[ "$STORE_RELEASE" == "true" || "${CM_TAG:-}" == v* ]]; then
             "$GODOT" --headless -s res://tests/release_check.gd -- iOS
           else
