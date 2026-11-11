@@ -190,8 +190,9 @@ func _describe_tool(i: int) -> Dictionary:
 func _describe_upgrade(key: String) -> Dictionary:
 	var u := GameState.upgrade_def(key)
 	var lvl := int(GameState.upgrade_levels.get(key, 0))
+	var desc: String = u.over_desc if u.has("over_from") and lvl >= int(u.over_from) else u.desc
 	var d := {"title": str(u.name), "note": "Lv %d/%d" % [lvl, int(u.max)],
-		"body": "%s per level.\nRight now: x%.2f" % [u.desc, GameState.upgrade_mult(key)],
+		"body": "%s per level.\nRight now: x%.2f" % [desc, GameState.upgrade_mult(key)],
 		"price": "", "can": false, "action": ""}
 	if GameState.upgrade_maxed(key):
 		d.price = "MAX"

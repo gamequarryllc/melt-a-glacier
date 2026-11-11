@@ -8,7 +8,10 @@ extends SceneTree
 ## browsing. Real first runs land somewhere between the two.
 ## Add "seed=N" for a different roll of the dice. For tuning the lake without
 ## editing files: "worth=X" (what its ice sells for) and "lakehp=K" (x the hp of
-## its layers from Jade Ice down). "map=harbor" plays Frozen Harbor.
+## its layers from Jade Ice down). "helpers=N" hires at most N penguins and N
+## sauna crews (the default bot sinks most of its water into hundreds of them,
+## which few players do), and "nooverdrive" stops Heat Output at level 25, to
+## see what the overdrive levels are worth. "map=harbor" plays Frozen Harbor.
 ## Variables stay untyped: this compiles before the GameState autoload exists.
 
 const DT := 0.05                 # must match --fixed-fps 20
@@ -35,6 +38,8 @@ var last_report := {"t": 0.0, "tool": 0.0, "finds": 0.0, "all": 0.0}
 var lake_worth := -1.0
 var lake_hp := 1.0
 var map := "valley"
+var max_walkers := -1            # most penguins / sauna crews to hire (-1 = no limit)
+var overdrive := true
 
 
 func _initialize() -> void:
@@ -52,6 +57,10 @@ func _initialize() -> void:
 			map = a.substr(4)
 		elif a.begins_with("lakehp="):
 			lake_hp = float(a.substr(7))
+		elif a.begins_with("helpers="):
+			max_walkers = int(a.substr(8))
+		elif a == "nooverdrive":
+			overdrive = false
 	if rng.seed == 0:
 		rng.seed = 7
 	_run.call_deferred()
@@ -203,10 +212,14 @@ func _shop() -> void:
 		var best := ""
 		var best_cost := INF
 		for key in ["heat", "nozzle", "sell"]:
+			if not overdrive and key == "heat" and int(gs.upgrade_levels.heat) >= int(gs.upgrade_def("heat").over_from):
+				continue
 			if not gs.upgrade_maxed(key) and gs.upgrade_cost(key) < best_cost:
 				best = key
 				best_cost = gs.upgrade_cost(key)
 		for i in Balance.HELPERS.size():
+			if max_walkers >= 0 and gs.helper_max_level(i) == 0 and int(gs.helper_counts[i]) >= max_walkers:
+				continue
 			if not gs.helper_maxed(i) and gs.helper_cost(i) < best_cost:
 				best = str(i)
 				best_cost = gs.helper_cost(i)

@@ -110,7 +110,9 @@ func _process(delta: float) -> void:
 func upgrade_mult(key: String) -> float:
 	for u in Balance.UPGRADES:
 		if u.key == key:
-			return 1.0 + float(u.per_level) * float(upgrade_levels.get(key, 0))
+			var lvl := int(upgrade_levels.get(key, 0))
+			var plain := mini(lvl, int(u.get("over_from", lvl)))   # levels past this multiply instead
+			return (1.0 + float(u.per_level) * plain) * pow(float(u.get("over_mult", 1.0)), lvl - plain)
 	return 1.0
 
 
@@ -304,7 +306,9 @@ func upgrade_maxed(key: String) -> bool:
 
 func upgrade_cost(key: String) -> float:
 	var u := upgrade_def(key)
-	return float(u.base) * pow(float(u.growth), float(upgrade_levels[key]))
+	var lvl := int(upgrade_levels[key])
+	var plain := mini(lvl, int(u.get("over_from", lvl)))
+	return float(u.base) * pow(float(u.growth), plain) * pow(float(u.get("over_growth", u.growth)), lvl - plain)
 
 
 func buy_upgrade(key: String) -> bool:

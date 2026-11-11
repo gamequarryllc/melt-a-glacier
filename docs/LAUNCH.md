@@ -19,7 +19,7 @@ You don't need AdMob or RevenueCat for this. A preview build shows Google's test
 
 1. Apple: register the bundle id and create the app record (section 1, steps 1 and 4 only).
 2. Codemagic: section 4.
-3. Start a build with `STORE_RELEASE` left at `false`. Then install TestFlight on the iPhone and accept the invite.
+3. Start a build with the workflow *iPhone to TestFlight* (the preview). Then install TestFlight on the iPhone and accept the invite.
 
 ## 0. Decide two permanent things
 
@@ -95,8 +95,10 @@ later `goog_...`. They go in `store_config.gd`.
 5. **Start new build** (workflow *iPhone to TestFlight*). In about 20-30 minutes the
    build appears in TestFlight. Install the TestFlight app on your iPhone to play it.
 
-The build stops early with a clear list if any store id is still a placeholder
-(`tests/release_check.gd`), so a half-wired build never reaches testers.
+For the build you submit to the App Store, pick the workflow *iPhone store build*
+instead: live ads and real purchases. It stops early with a clear list if any store
+id is still a placeholder (`tests/release_check.gd`), so a half-wired build never
+reaches the store.
 
 Free Codemagic accounts get 500 Mac minutes a month: about 15-20 builds.
 
