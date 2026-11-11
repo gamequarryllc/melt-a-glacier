@@ -44,7 +44,7 @@ class FakeRevenueCat:
 		var d := {"cancelled": next_purchase == "cancel", "active_entitlements": 0,
 			"error": "Network error" if next_purchase == "error" else "", "product_id": pid, "transaction_id": "t1"}
 		if next_purchase == "ok":
-			owned.append("remove_ads" if pid == "remove_ads_2x" else "golden_dryer")
+			owned.append("remove_ads" if pid == "remove_ads_2x" else "helpers_2x")
 		purchase_result.emit.call_deferred(d)
 
 	func restore_purchases() -> void:
@@ -205,7 +205,7 @@ func _run() -> void:
 
 	print("RevenueCat store (fake plugin)")
 	var fake := FakeRevenueCat.new()
-	fake.owned = ["golden_dryer"]
+	fake.owned = ["helpers_2x"]
 	var store = Store.new()
 	root.add_child(store)
 	var got := {"purchased": [], "failed": [], "restored": [], "restore_done": []}
@@ -214,28 +214,28 @@ func _run() -> void:
 	store.restored.connect(func(id): got.restored.append(id))
 	store.restore_done.connect(func(n, e): got.restore_done.append([n, e]))
 	Engine.register_singleton("GodotxRevenueCat", fake)
-	store.start(["remove_ads_2x", "golden_hair_dryer"])
+	store.start(["remove_ads_2x", "helpers_2x"])
 	await _frames(3)
 	check(fake.calls.has("initialize") and fake.calls.has("fetch_products"), "configures RevenueCat and asks for prices")
 	check(store.price_string("remove_ads_2x", "$2.99") == "€1,99", "uses the store's local price")
 	check(store.price_string("unknown", "$9") == "$9", "falls back when the store has no price")
-	check(got.restored == ["golden_hair_dryer"], "grants what the account already owns at startup")
+	check(got.restored == ["helpers_2x"], "grants what the account already owns at startup")
 	store.purchase("remove_ads_2x")
 	await _frames(3)
 	check(got.purchased == ["remove_ads_2x"], "a successful purchase is reported once")
 	fake.next_purchase = "cancel"
-	store.purchase("golden_hair_dryer")
+	store.purchase("helpers_2x")
 	await _frames(3)
 	check(got.failed.size() == 1 and got.failed[0][1] == "cancelled", "a cancelled purchase says so")
 	fake.next_purchase = "error"
-	store.purchase("golden_hair_dryer")
+	store.purchase("helpers_2x")
 	await _frames(3)
 	check(got.failed.size() == 2 and got.failed[1][1] == "no connection, try again later", "store errors read nicely")
 	got.restored.clear()
 	store.restore()
 	await _frames(4)
 	check(got.restore_done == [[2, ""]], "restore reports how many things it found")
-	check(got.restored.has("remove_ads_2x") and got.restored.has("golden_hair_dryer"), "restore grants both products")
+	check(got.restored.has("remove_ads_2x") and got.restored.has("helpers_2x"), "restore grants both products")
 	Engine.unregister_singleton("GodotxRevenueCat")
 	store.queue_free()
 	await _frames(2)
@@ -244,14 +244,27 @@ func _run() -> void:
 	print("grant rules (Monetization autoload)")
 	var mon = root.get_node("Monetization")
 	var gs = root.get_node("GameState")
-	gs.owns_golden_dryer = false
-	gs.golden_equipped = false
-	mon._grant("golden_hair_dryer")
-	check(gs.owns_golden_dryer and gs.golden_equipped, "buying the golden dryer equips it")
-	gs.golden_equipped = false
-	mon._grant("golden_hair_dryer")
-	check(not gs.golden_equipped, "a later restore doesn't switch it back on")
-	gs.owns_golden_dryer = false
+	var had_ads: bool = gs.owns_remove_ads_2x
+	gs.owns_remove_ads_2x = false
+	gs.owns_helpers_2x = false
+	gs.helper_counts[0] = 3
+	var tool_before: float = gs.tool_power()
+	var crew_before: float = gs.total_helper_power()
+	mon._grant("helpers_2x")
+	check(gs.owns_helpers_2x and is_equal_approx(gs.total_helper_power(), crew_before * 2.0)
+		and is_equal_approx(gs.tool_power(), tool_before), "2x Helpers doubles the helpers and leaves your tool alone")
+	mon._grant("remove_ads_2x")
+	check(is_equal_approx(gs.tool_power(), tool_before * 2.0) and is_equal_approx(gs.total_helper_power(), crew_before * 2.0),
+		"Remove Ads + 2x Heat doubles your tool and leaves the helpers alone")
+	gs.reset_state(true)
+	check(gs.owns_helpers_2x and gs.owns_remove_ads_2x and gs.helper_counts[0] == 0,
+		"both purchases are kept when the game starts over or moves to another glacier")
+	var saved: Dictionary = gs.to_dict()
+	check(saved.owns_helpers_2x and saved.owns_remove_ads_2x, "and both are written to the save")
+	check(not mon.PRODUCTS.has("golden_hair_dryer"), "the Golden Hair Dryer is no longer sold")
+	gs.owns_helpers_2x = false
+	gs.owns_remove_ads_2x = had_ads
+	gs.save_game()   # _grant saved them as owned; don't leave that for the next test
 
 	print("mobile provider without plugins")
 	var mobile = Mobile.new()

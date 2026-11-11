@@ -1172,20 +1172,13 @@ func _build_catalogue_rows() -> void:
 	for id in Monetization.PRODUCTS:
 		var p: Dictionary = Monetization.PRODUCTS[id]
 		var pid: String = id
-		var icon := "noads" if pid == Monetization.PRODUCT_REMOVE_ADS_2X else "dryer"
-		var desc := "No interstitial ads, and everything melts 2x forever." if pid == Monetization.PRODUCT_REMOVE_ADS_2X \
-			else "A gold hair dryer. Purely cosmetic, purely fabulous."
-		var row := _row(icon, p.title, desc)
+		var row := _row(p.icon, p.title, p.desc)
 		_row_refreshers.append(func():
 			if Monetization.owns(pid):
 				row.set_button("Owned", false)
 			else:
 				row.set_button(Monetization.price(pid), true))
 		row.button.pressed.connect(func(): Monetization.buy(pid))
-	if GameState.owns_golden_dryer:
-		var g := _row("dryer", "Golden hair dryer", "Show the gold version of the hair dryer.")
-		_row_refreshers.append(func(): g.set_button("On" if GameState.golden_equipped else "Off", true))
-		g.button.pressed.connect(func(): GameState.golden_equipped = not GameState.golden_equipped)
 	var restore := _row("restore", "Restore purchases", "Re-download what you already bought.")
 	restore.set_button("Restore", true)
 	restore.button.pressed.connect(func():
