@@ -219,7 +219,8 @@ const HARBOR_DISCOVERIES = [
 # Nothing melts while you're away: it's a game you play in a sitting.
 const BOOST_DURATION := 300.0          # "watch an ad for 2x heat for 5 min"
 const BOOST_MULT := 2.0
-const PERMANENT_MULT := 2.0            # from the "Remove ads + permanent 2x" IAP
+const PERMANENT_MULT := 2.0            # your own tool, from the "Remove Ads + 2x Heat" purchase
+const HELPERS_IAP_MULT := 2.0          # every helper, from the "2x Helpers" purchase
 const INTERSTITIAL_COOLDOWN := 240.0
 const INTERSTITIAL_MIN_PROGRESS := 0.15  # no interstitials before 15% of the ice is gone
 const HELPER_RUSH_DURATION := 180.0    # "watch an ad: helpers work 3x for 3 min"

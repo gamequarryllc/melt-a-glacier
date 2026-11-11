@@ -44,7 +44,6 @@ var _bob_t := 0.0
 var _tool_holder: Node3D
 var _tool_model: Node3D
 var _shown_tool := -1
-var _shown_gold := false
 var _fx: ToolFx                     # what comes out of the tool (each tool has its own look)
 var _drips: CPUParticles3D
 var _jet: CPUParticles3D
@@ -355,7 +354,7 @@ func ray(dist: float) -> Dictionary:
 
 
 func _update_tool(delta: float) -> void:
-	if _shown_tool != GameState.tool_index or _shown_gold != GameState.golden_equipped:
+	if _shown_tool != GameState.tool_index:
 		_build_tool_model()
 	var reach := GameState.tool_range()
 	target = ray(reach)
@@ -387,10 +386,9 @@ func _update_tool(delta: float) -> void:
 func _build_tool_model() -> void:
 	## The tool in your hand: the same model that hangs on the shed's tool wall.
 	_shown_tool = GameState.tool_index
-	_shown_gold = GameState.golden_equipped
 	if _tool_model != null:
 		_tool_model.queue_free()
-	var mi := Props.instance(Props.tool_mesh(_shown_tool, _shown_gold and _shown_tool == 0))
+	var mi := Props.instance(Props.tool_mesh(_shown_tool))
 	mi.scale = Vector3.ONE * (0.6 + 0.04 * float(_shown_tool))   # better tools are a bit chunkier
 	_tool_model = mi
 	_tool_holder.add_child(mi)

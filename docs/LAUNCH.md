@@ -38,8 +38,8 @@ The bundle id can never change once the app is in either store.
 2. **Agreements, Tax and Banking**: accept the *Paid Apps* agreement and add bank
    and tax info. In-app purchases don't work, even in TestFlight, until this is active.
 3. **In-app purchases** (Monetization > In-App Purchases), both *Non-Consumable*:
-   - `remove_ads_2x`: "Remove Ads + 2x Melting", $2.99
-   - `golden_hair_dryer`: "Golden Hair Dryer", $0.99
+   - `remove_ads_2x`: "Remove Ads + 2x Heat", $2.99
+   - `helpers_2x`: "2x Helpers", $1.99
    Each needs a display name, description and a review screenshot (any in-game
    screenshot of the catalogue works).
 4. **App Store Connect API key** (Users and Access > Integrations > App Store
@@ -73,9 +73,9 @@ They go in `project.godot` (`[admob]` section) and `scripts/monetization/store_c
    Connect > Users and Access > Integrations > In-App Purchase > generate; upload the
    `.p8`, with its Key ID and your Issuer ID).
 3. Add a **Play Store** app later (needs the Play service account from step 5).
-4. **Products**: import `remove_ads_2x` and `golden_hair_dryer`.
-5. **Entitlements**: create `remove_ads` (attach `remove_ads_2x`) and `golden_dryer`
-   (attach `golden_hair_dryer`). The game grants by entitlement, so these names matter.
+4. **Products**: import `remove_ads_2x` and `helpers_2x`.
+5. **Entitlements**: create `remove_ads` (attach `remove_ads_2x`) and `helpers_2x`
+   (attach `helpers_2x`). The game grants by entitlement, so these names matter.
 6. Offerings aren't needed (no paywall).
 
 **Send me**: the **public SDK keys** (Project settings > API keys): `appl_...` and
@@ -122,7 +122,7 @@ Free Codemagic accounts get 500 Mac minutes a month: about 15-20 builds.
 5. Actions > *Mobile builds* > Run workflow with **release** ticked. Download the
    `.aab` from the run and upload it by hand the **first** time (Play requires the
    first upload through the Console). Create the products `remove_ads_2x` and
-   `golden_hair_dryer` (one-time products) after that first upload.
+   `helpers_2x` (one-time products) after that first upload.
 6. Optional, for one-click releases after that: Google Cloud service account with
    access in Play Console (Users and permissions), JSON key into the
    `PLAY_SERVICE_ACCOUNT_JSON` secret. Release runs then publish to internal testing.

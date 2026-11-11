@@ -668,6 +668,7 @@ func _run() -> void:
 
 	# --- Frozen Harbor: the second map. What you've bought comes with you.
 	gs.owns_remove_ads_2x = true
+	gs.owns_helpers_2x = true
 	gs.wipe_save("harbor")
 	world2.queue_free()
 	await _frames(2)
@@ -679,8 +680,13 @@ func _run() -> void:
 	gs.owns_remove_ads_2x = false
 	var plain3: float = gs.tool_power()
 	gs.owns_remove_ads_2x = true
-	check(is_equal_approx(paid3, plain3 * Balance.PERMANENT_MULT),
-		"a purchase made in the valley still counts in the harbour (x%.0f heat)" % (paid3 / plain3))
+	var crew3: float = gs.helper_each(0)
+	gs.owns_helpers_2x = false
+	var crew3_plain: float = gs.helper_each(0)
+	gs.owns_helpers_2x = true
+	check(is_equal_approx(paid3, plain3 * Balance.PERMANENT_MULT)
+		and is_equal_approx(crew3, crew3_plain * Balance.HELPERS_IAP_MULT),
+		"purchases made in the valley still count in the harbour (x%.0f heat, x%.0f helpers)" % [paid3 / plain3, crew3 / crew3_plain])
 	check(Balance.TOOLS[0].name == "Orbital Mirror" and gs.tool_index == 0 and Balance.TOOLS.size() == 6,
 		"the harbour starts with the Orbital Mirror, and 5 new tools to buy")
 	check(world3._find_markers.size() == Balance.DISCOVERIES.size() and Balance.DISCOVERIES.size() == 14,
@@ -723,8 +729,9 @@ func _run() -> void:
 	world3.force_melt = false
 	check(gs.grid.volume_left() < before3, "every harbour tool melts (%.0f m3 gone)" % (before3 - gs.grid.volume_left()))
 	gs.wipe_save("valley")
-	check(gs.map == "valley" and gs.owns_remove_ads_2x, "and it's still yours back in the valley")
+	check(gs.map == "valley" and gs.owns_remove_ads_2x and gs.owns_helpers_2x, "and they're still yours back in the valley")
 	gs.owns_remove_ads_2x = false
+	gs.owns_helpers_2x = false
 	gs.wipe_save("valley")
 	print("SMOKE TEST ", "PASSED" if ok else "FAILED")
 	quit(0 if ok else 1)
